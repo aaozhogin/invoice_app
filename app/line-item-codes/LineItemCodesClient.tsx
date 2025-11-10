@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSupabaseClient } from '../lib/supabaseClient';
+import getSupabaseClient from '../lib/supabaseClient';
 import { Database } from '../lib/types/supabase';
 
 type LineItem = Database['public']['Tables']['line_items']['Row'];
