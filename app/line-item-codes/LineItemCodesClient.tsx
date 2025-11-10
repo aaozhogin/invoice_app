@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
 import { Database } from '../lib/types/supabase';
 
@@ -22,7 +22,6 @@ export default function LineItemCodesClient() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      // remove the incorrect generic and type the whole response
       const res = (await supabase.from('line_items').select('*')) as {
         data: LineItem[] | null;
         error: any;
@@ -77,7 +76,6 @@ export default function LineItemCodesClient() {
       rate_offset: offset ?? 0,
     } satisfies Database['public']['Tables']['line_items']['Insert'];
 
-    // remove the incorrect generic here too and type response
     const res = (await supabase.from('line_items').insert([newItem]).select()) as {
       data: LineItem[] | null;
       error: any;
@@ -105,12 +103,13 @@ export default function LineItemCodesClient() {
   };
 
   return (
-    <div>
-      <h1>This is a line item codes page</h1>
+    <div style={{ padding: 16 }}>
+      <h1>Line Item Codes</h1>
+
       <button onClick={() => setFormVisible(true)}>Add line item code</button>
 
       {formVisible && (
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             placeholder="Line Item Code"
             value={form.code}
@@ -142,33 +141,27 @@ export default function LineItemCodesClient() {
           <button disabled={isAddDisabled} onClick={handleAdd}>
             Add
           </button>
+          <button onClick={() => setFormVisible(false)}>Cancel</button>
         </div>
       )}
 
-      <div style={{ marginTop: '2rem' }}>
-        {items.map((item, idx) => (
-          <div key={item.id ?? idx} style={{ display: 'flex', gap: '1rem' }}>
-            <span>{item.code}</span>
-            <span>{item.category}</span>
-            <span>{item.description ?? '—'}</span>
-            <span>{item.max_rate ?? '—'}</span>
-            <span>{item.billed_rate ?? '—'}</span>
-            <span
-              style={{
-                color:
-                  item.rate_offset === null
-                    ? 'black'
-                    : item.rate_offset < 0
-                    ? 'green'
-                    : item.rate_offset === 0
-                    ? 'orange'
-                    : 'red',
-              }}
-            >
-              {typeof item.rate_offset === 'number' ? `${item.rate_offset.toFixed(2)}%` : '—'}
-            </span>
-          </div>
-        ))}
+      <div style={{ marginTop: 20 }}>
+        {items.length === 0 ? (
+          <div>No line items</div>
+        ) : (
+          items.map((item) => (
+            <div key={item.id} style={{ display: 'flex', gap: 12, padding: 6, borderBottom: '1px solid #eee' }}>
+              <div style={{ minWidth: 100 }}>{item.code}</div>
+              <div style={{ minWidth: 120 }}>{item.category}</div>
+              <div style={{ minWidth: 160 }}>{item.description ?? '—'}</div>
+              <div style={{ minWidth: 80 }}>{item.max_rate ?? '—'}</div>
+              <div style={{ minWidth: 80 }}>{item.billed_rate ?? '—'}</div>
+              <div style={{ color: item.rate_offset == null ? 'black' : item.rate_offset < 0 ? 'green' : item.rate_offset === 0 ? 'orange' : 'red' }}>
+                {typeof item.rate_offset === 'number' ? `${item.rate_offset.toFixed(2)}%` : '—'}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

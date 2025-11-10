@@ -1,7 +1,5 @@
-export default function LineItemCodesPage() {
-  return (
-    <div>
-      <h1>This is a line item codes page</h1>
-    </div>
-  );
+import LineItemCodesClient from './LineItemCodesClient';
+
+export default function Page() {
+  return <LineItemCodesClient />;
 }
