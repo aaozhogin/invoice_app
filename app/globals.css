@@ -197,3 +197,163 @@ img, svg {
   padding: 24px;
   box-sizing: border-box;
 }
+
+/* --- Invisible table form layout (override earlier rules) --- */
+:root {
+  --label-width: 220px;   /* label column width */
+  --control-base: 220px;  /* base width for code/category controls */
+}
+
+/* Ensure the grid layout and override any prior .field/.form-row rules */
+.form-table {
+  display: grid !important;
+  grid-template-columns: var(--label-width) 1fr;
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+/* label column: right-aligned with trailing ":" */
+.form-table .label {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.form-table .label::after {
+  content: ":";
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+/* control column: left-aligned and stacked items (errors under control) */
+.form-table .control {
+  justify-self: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Force single-line inputs/selects and apply base width for code/category */
+.form-table .control input,
+.form-table .control select {
+  width: var(--control-base) !important;
+  box-sizing: border-box;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  height: 38px;
+}
+
+/* Description control: three times wider than base */
+.form-table .description-control input {
+  width: calc(var(--control-base) * 3) !important;
+  min-width: 420px;
+}
+
+/* Max/Billed controls: three times shorter than base */
+.form-table .small-control input {
+  width: calc(var(--control-base) / 3) !important;
+  min-width: 64px;
+  text-align: right; /* numeric alignment */
+}
+
+/* Error text */
+.form-table .field-error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+/* Actions should sit in the second column: place an empty label cell then controls */
+.form-table .actions {
+  grid-column: 2;
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Defensive: override previous stacked-label rules */
+.form-row, .field {
+  display: block;
+}
+
+/* Records table + hover-delete styles */
+.records-table {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.records-header {
+  display: grid;
+  grid-template-columns: 160px 160px 1fr 80px 80px 80px 60px;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  align-items: center;
+}
+.records-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 160px 160px 1fr 80px 80px 80px 60px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background-color 0.12s ease;
+  position: relative;
+}
+.row:hover {
+  background: rgba(125,211,252,0.02);
+}
+.cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desc-cell {
+  min-width: 0;
+}
+.actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* trash button hidden until hover */
+.trash {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.row:hover .trash {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ensure mobile / small screens wrap sensibly */
+@media (max-width: 800px) {
+  .records-header, .row {
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: auto;
+  }
+  .records-header div:nth-child(7), .row > .actions-cell {
+    justify-self: end;
+  }
+}
