@@ -33,3 +33,123 @@ a:hover {
   margin: 0 auto;
   padding: 0 20px;
 }
+
+/* Dark-mode globals for the whole app */
+:root {
+  --bg: #0b1220;
+  --surface: #0f1724;
+  --muted: #94a3b8;
+  --text: #e6eef6;
+  --accent: #7dd3fc;
+  --accent-contrast: #012028;
+  --success: #86efac;
+  --danger: #fb7185;
+  --border: #1f2937;
+  --radius: 8px;
+}
+
+/* Force dark theme across the app */
+html.dark, html, body {
+  background: linear-gradient(180deg, var(--bg), #071021);
+  color: var(--text);
+  height: 100%;
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Layout helpers */
+#__next {
+  min-height: 100vh;
+}
+
+/* Surface elements */
+.container, main, .card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Text and muted text */
+p, span, label, div {
+  color: var(--text);
+}
+.muted, small {
+  color: var(--muted);
+}
+
+/* Links */
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Inputs, selects, textareas */
+input, select, textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  outline: none;
+  transition: box-shadow .12s ease, border-color .12s ease;
+}
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 4px rgba(125,211,252,0.06);
+  border-color: var(--accent);
+}
+
+/* Buttons */
+button {
+  background: linear-gradient(180deg, var(--accent), #5fd0ef);
+  color: var(--accent-contrast);
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+}
+button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* Tables / lists */
+.table, .list {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th, .table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Small helpers */
+.badge {
+  background: rgba(255,255,255,0.03);
+  color: var(--muted);
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+/* Make images/icons adapt */
+img, svg {
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.25));
+}
+
+/* Reduce contrast for developer extension messages (visual only) */
+.console-note {
+  opacity: 0.8;
+}
