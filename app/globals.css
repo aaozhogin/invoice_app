@@ -289,7 +289,7 @@ img, svg {
 }
 .records-header {
   display: grid;
-  grid-template-columns: 160px 160px 1fr 80px 80px 80px 60px;
+  grid-template-columns: 60px 160px 160px 1fr 120px 120px 80px 80px 80px 100px 80px;
   gap: 12px;
   padding: 8px 12px;
   color: var(--muted);
@@ -305,17 +305,23 @@ img, svg {
 }
 .row {
   display: grid;
-  grid-template-columns: 160px 160px 1fr 80px 80px 80px 60px;
+  grid-template-columns: 60px 160px 160px 1fr 120px 120px 80px 80px 80px 100px 80px;
   gap: 12px;
   align-items: center;
   padding: 8px 12px;
   border-radius: 6px;
   transition: background-color 0.12s ease;
   position: relative;
+  cursor: grab;
+  transition: opacity 0.2s, background 0.2s;
 }
-.row:hover {
-  background: rgba(125,211,252,0.02);
+.row:active { cursor: grabbing; }
+
+.row.dragging {
+  opacity: 0.5;
+  background: rgba(125, 211, 252, 0.1);
 }
+
 .cell {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,7 +333,7 @@ img, svg {
 .actions-cell {
   display: flex;
   justify-content: flex-end;
-  align-items: center;
+  gap: 8px;
 }
 
 /* trash button hidden until hover */
@@ -347,6 +353,125 @@ img, svg {
   transform: translateX(0);
 }
 
+/* edit button hidden until hover */
+.edit-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.row:hover .edit-btn {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* Special flag: compact checkbox + tight label spacing */
+.special-options {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 0;
+}
+
+.special-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  padding: 0;
+  width: auto;
+}
+
+/* custom small checkbox -> revert to normal square white checkbox */
+.special-option .special-checkbox {
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  border: 1px solid #cfcfcf;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+/* use accent-color so checked box respects theme color */
+.special-option .special-checkbox:checked {
+  accent-color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* keep focus visible */
+.special-option .special-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(125,211,252,0.06);
+}
+
+/* label text */
+.special-option .special-label {
+  margin-left: 4px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* Time input: icon on the left, 2x smaller input width, 15-minute steps (step attr used) */
+.time-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-input .time-icon {
+  display: none !important;
+}
+
+/* make the native right-side picker icon (calendar/clock) appear white */
+/* WebKit browsers (Chrome, Edge, Safari) */
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(200%) saturate(0%) !important;
+  opacity: 1 !important;
+}
+
+/* Some browsers render an inner shadow/padding — tighten the input padding now the left icon is removed */
+.time-input input[type="time"],
+.time-input input[type="date"] {
+  padding-left: 8px !important;
+}
+
+/* Optional: a slightly stronger rule for Edge/Chromium if the icon still looks dark */
+input[type="time"]::-webkit-calendar-picker-indicator {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* Force smaller time input width (override other control widths) */
+.time-input input[type="time"] {
+  width: calc(var(--control-base) / 2) !important;
+  min-width: 80px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* keep responsive fallback */
+@media (max-width: 900px) {
+  .time-input input[type="time"] {
+    width: 72px !important;
+  }
+}
+
 /* ensure mobile / small screens wrap sensibly */
 @media (max-width: 800px) {
   .records-header, .row {
@@ -356,4 +481,179 @@ img, svg {
   .records-header div:nth-child(7), .row > .actions-cell {
     justify-self: end;
   }
+}
+
+/* responsive adjustments */
+@media (max-width: 900px) {
+  .records-header,
+  .row {
+    grid-template-columns: 120px 120px 1fr 100px 100px 70px 70px 70px 90px 50px;
+  }
+
+  .time-input input[type="time"] {
+    width: 90px;
+  }
+}
+
+/* tighten special-flag control: make the control cell narrow and the checkbox much smaller */
+.form-table .control.special-options {
+  width: auto !important; /* don't inherit the large input width */
+  padding: 0;
+}
+
+/* wrapper around each checkbox + label - keep compact */
+.special-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+  padding: 0;
+  width: auto;
+}
+
+/* enforce very small native-looking square checkbox (approx 3× smaller than 16px) */
+.special-option .special-checkbox,
+.form-table .control input.special-checkbox {
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0;
+  padding: 0;
+  border-radius: 2px;
+  vertical-align: middle;
+  box-sizing: content-box;
+}
+
+/* keep label text close */
+.special-option .special-label {
+  margin-left: 4px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* --- TimePicker compact styles (non-transparent, opaque dropdown) --- */
+.timepicker { position: relative; display: inline-block; }
+.timepicker-input {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 110px;
+  height: 36px;
+  cursor: pointer;
+}
+.timepicker-input .tp-value { font-family: inherit; }
+.timepicker-input .tp-indicator { color: #fff; margin-left: 8px; }
+
+/* dropdown: three narrow vertical columns (hours, minutes, AM/PM) - OPAQUE, no transparency */
+.timepicker-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg); /* opaque background, not transparent */
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  min-width: 280px;
+}
+
+/* column label */
+.tp-col-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+/* columns */
+.tp-col { display: flex; flex-direction: column; gap: 6px; }
+.tp-hours { width: 120px; }
+.tp-minutes { width: 70px; }
+.tp-ampm { width: 60px; }
+
+/* list: vertical scrollable list of buttons */
+.tp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+/* items full width block */
+.tp-item {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.tp-item:hover { background: rgba(255, 255, 255, 0.02); }
+.tp-item.selected {
+  background: var(--accent);
+  color: #00130f;
+  border-color: var(--accent);
+}
+
+/* actions (Clear / OK) */
+.tp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+.tp-clear,
+.tp-ok {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* disabled AM/PM buttons */
+.tp-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Hide number input spinners (Chrome, Edge, Safari) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Hide number input spinners (Firefox) */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Optional: ensure consistent caret color */
+input[type="number"] {
+  caret-color: var(--text);
+}
+
+/* ensure compact layout on small screens */
+@media (max-width: 520px) {
+  .timepicker-dropdown { left: 0; right: 0; min-width: auto; width: calc(100% - 24px); }
+  .tp-hours { width: 40%; }
+  .tp-minutes { width: 30%; }
+  .tp-ampm { width: 25%; }
 }
