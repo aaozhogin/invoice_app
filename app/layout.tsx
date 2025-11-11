@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 export const metadata = {
   title: 'Invoice App',
+  description: 'Manage invoices and line items',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -12,15 +13,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="app-shell">
           <aside className="sidebar">
             <div className="sidebar-header">Invoice App</div>
-            <nav>
-              <Link href="/" className="nav-link">
-                Home
-              </Link>
-              <Link href="/line-item-codes" className="nav-link">
-                Line Item Codes
-              </Link>
-              {/* add more links as needed */}
-            </nav>
+            <Link href="/" className="nav-link">
+              Home
+            </Link>
+            <Link href="/calendar" className="nav-link">
+              Calendar
+            </Link>
+            <Link href="/line-item-codes" className="nav-link">
+              Line Item Codes
+            </Link>
           </aside>
 
           <main className="main">{children}</main>
