@@ -512,207 +512,151 @@ export default function CarersClient() {
         </div>
       )}
 
-      <div style={{ marginTop: '2rem' }}>
-        <div className="records-table carers-table" role="table" aria-label="Carers">
-          <div className="records-header carers-header" role="row">
-            <div role="columnheader">Seq</div>
-            <div role="columnheader">Name</div>
-            <div role="columnheader">Address</div>
-            <div role="columnheader">Phone</div>
-            <div role="columnheader">Email</div>
-            <div role="columnheader">ABN</div>
-            <div role="columnheader">Bank Details</div>
-            <div role="columnheader">Logo</div>
-            <div role="columnheader">Actions</div>
+      {/* Carers Table */}
+      {carers.length > 0 && (
+        <div className="carers-table" style={{ marginTop: '2rem' }}>
+          {/* Header */}
+          <div className="carers-header">
+            <div>Seq</div>
+            <div>Name</div>
+            <div>Address</div>
+            <div>Phone</div>
+            <div>Email</div>
+            <div>ABN</div>
+            <div>Bank Details</div>
+            <div>Logo</div>
+            <div>Actions</div>
           </div>
 
-          <div className="records-body" role="rowgroup">
-            {carers.length === 0 ? (
-              <div className="no-records">No carers</div>
-            ) : (
-              carers.map((carer, idx) => (
-                <div 
-                  key={carer.id} 
-                  className={`row carers-row ${draggedId === carer.id ? 'dragging' : ''}`}
-                  role="row"
-                  draggable
-                  onDragStart={() => handleDragStart(carer.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDrop(carer.id)}
+          {/* Table Rows */}
+          {carers.map((carer, index) => (
+            <div
+              key={carer.id}
+              className="carers-row row"
+              draggable
+              onDragStart={() => handleDragStart(carer.id)}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(carer.id)}
+              style={{
+                backgroundColor: draggedId === carer.id ? 'var(--surface-accent)' : undefined,
+              }}
+            >
+              <div>{index + 1}</div>
+              <div>{`${carer.first_name} ${carer.last_name}`}</div>
+              <div style={{ fontSize: '0.9em' }}>{carer.address}</div>
+              <div>{carer.phone_number}</div>
+              <div style={{ fontSize: '0.9em', wordBreak: 'break-all' }}>{carer.email}</div>
+              <div>{carer.abn}</div>
+              <div style={{ fontSize: '0.85em', lineHeight: '1.2' }}>
+                <div><strong>Account:</strong> {carer.account_name}</div>
+                <div><strong>BSB:</strong> {carer.bsb}</div>
+                <div><strong>Acc #:</strong> {carer.account_number}</div>
+              </div>
+              <div>
+                {carer.logo_url ? (
+                  <img 
+                    src={carer.logo_url} 
+                    alt="Logo" 
+                    style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: '4px' }}
+                  />
+                ) : (
+                  '—'
+                )}
+              </div>
+              <div>
+                <button
+                  className="edit-btn"
+                  title="Edit"
+                  onClick={() => handleEdit(carer)}
                 >
-                  <div className="cell seq">{idx + 1}</div>
-                  <div className="cell name-cell">
-                    {`${carer.first_name} ${carer.last_name}`}
-                  </div>
-                  <div className="cell address-cell">
-                    {carer.address}
-                  </div>
-                  <div className="cell phone-cell">{carer.phone_number}</div>
-                  <div className="cell email-cell">{carer.email}</div>
-                  <div className="cell abn-cell">{carer.abn}</div>
-                  <div className="cell bank-cell">
-                    {formatBankDetails(carer)}
-                  </div>
-                  <div className="cell logo-cell">
-                    {carer.logo_url ? (
-                      <img 
-                        src={carer.logo_url} 
-                        alt="Logo" 
-                        style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: '4px' }}
-                      />
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                  <div className="cell actions-cell">
-                    <button
-                      className="edit-btn"
-                      title="Edit"
-                      onClick={() => handleEdit(carer)}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="trash"
-                      title="Delete"
-                      onClick={() => handleDelete(carer.id)}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  ✏️
+                </button>
+                <button
+                  className="trash"
+                  title="Delete"
+                  onClick={() => handleDelete(carer.id)}
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
+      )}
 
-        <style jsx>{`
-          .section-divider {
-            grid-column: 1 / -1;
-            font-weight: bold;
-            font-size: 1rem;
-            color: var(--text);
-            margin: 1rem 0 0.5rem 0;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
-          }
-          
-          .field-error {
-            color: var(--danger);
-            font-size: 0.8rem;
-            margin-top: 0.25rem;
-          }
-          
-          .carers-table {
-            width: 100%;
-            overflow-x: auto;
-          }
-          
-          .carers-table .carers-header,
-          .carers-table .carers-row {
-            grid-template-columns: 50px minmax(150px, 1fr) minmax(200px, 2fr) minmax(120px, 1fr) minmax(180px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) 60px 100px;
-            gap: 12px;
-            width: 100%;
-          }
-          
-          .carers-table .name-cell {
-            font-weight: 500;
-            font-size: 0.95em;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            white-space: normal;
-            line-height: 1.3;
-          }
-          
-          .carers-table .address-cell {
+      <style jsx>{`
+        .carers-table {
+          display: grid;
+          gap: 1px;
+          background-color: var(--border);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        
+        .carers-header,
+        .carers-row {
+          display: grid;
+          grid-template-columns: 50px minmax(150px, 1fr) minmax(200px, 2fr) minmax(120px, 1fr) minmax(180px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) 60px 100px;
+          gap: 1px;
+          background-color: var(--surface);
+        }
+        
+        .carers-header {
+          font-weight: 600;
+          background-color: var(--surface-accent);
+        }
+        
+        .carers-header > div,
+        .carers-row > div {
+          padding: 12px 8px;
+          display: flex;
+          align-items: center;
+          background-color: inherit;
+          overflow-wrap: break-word;
+          word-break: break-word;
+        }
+        
+        .carers-row {
+          cursor: grab;
+        }
+        
+        .carers-row:hover {
+          background-color: var(--surface-hover);
+        }
+        
+        .carers-row:active {
+          cursor: grabbing;
+        }
+        
+        .carers-row > div:last-child {
+          justify-content: center;
+          align-self: center;
+        }
+        
+        @media (max-width: 1400px) {
+          .carers-header,
+          .carers-row {
+            grid-template-columns: 40px minmax(120px, 1fr) minmax(150px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) minmax(80px, 0.8fr) minmax(120px, 1fr) 50px 80px;
             font-size: 0.9em;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            hyphens: auto;
-            white-space: normal;
-            line-height: 1.3;
-            max-width: 100%;
           }
-          
-          .carers-table .email-cell {
-            font-size: 0.9em;
-            word-break: break-all;
-            overflow-wrap: break-word;
-            white-space: normal;
-            line-height: 1.3;
-          }
-          
-          .carers-table .phone-cell {
-            font-size: 0.9em;
-            word-wrap: break-word;
-            white-space: normal;
-          }
-          
-          .carers-table .abn-cell {
-            font-size: 0.9em;
-            word-wrap: break-word;
-            white-space: normal;
-          }
-          
-          .carers-table .bank-cell {
+        }
+        
+        @media (max-width: 1200px) {
+          .carers-header,
+          .carers-row {
+            grid-template-columns: 35px minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(130px, 1fr) minmax(70px, 0.7fr) minmax(100px, 1fr) 45px 70px;
             font-size: 0.85em;
-            line-height: 1.2;
-            word-wrap: break-word;
-            white-space: normal;
           }
-          
-          .carers-table .logo-cell {
-            text-align: center;
-            justify-self: center;
+        }
+        
+        @media (max-width: 900px) {
+          .carers-header,
+          .carers-row {
+            grid-template-columns: 30px 1fr 1.2fr 0.8fr 1fr 0.6fr 1fr 40px 60px;
+            font-size: 0.8em;
           }
-          
-          .carers-table .actions-cell {
-            justify-self: end;
-            display: flex;
-            gap: 4px;
-            align-items: center;
-          }
-          
-          .carers-table .row {
-            min-height: 60px;
-            align-items: center;
-            padding: 12px;
-          }
-          
-          .carers-table .cell {
-            padding-top: 4px;
-            align-self: center;
-          }
-          
-          .carers-table .seq {
-            align-self: center;
-          }
-          
-          @media (max-width: 1400px) {
-            .carers-table .carers-header,
-            .carers-table .carers-row {
-              grid-template-columns: 40px minmax(120px, 1fr) minmax(150px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) minmax(80px, 0.8fr) minmax(120px, 1fr) 50px 80px;
-              font-size: 0.9em;
-            }
-          }
-          
-          @media (max-width: 1200px) {
-            .carers-table .carers-header,
-            .carers-table .carers-row {
-              grid-template-columns: 35px minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(130px, 1fr) minmax(70px, 0.7fr) minmax(100px, 1fr) 45px 70px;
-              font-size: 0.85em;
-            }
-          }
-          
-          @media (max-width: 900px) {
-            .carers-table .carers-header,
-            .carers-table .carers-row {
-              grid-template-columns: 30px 1fr 1.2fr 0.8fr 1fr 0.6fr 1fr 40px 60px;
-              font-size: 0.8em;
-            }
-          }
+        }
         `}</style>
-      </div>
     </div>
   );
 }

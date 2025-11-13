@@ -93,6 +93,35 @@ export type Database = {
           updated_at?: string | null;
         };
       };
+      clients: {
+        Row: {
+          id: number;
+          first_name: string;
+          last_name: string;
+          ndis_number: number;
+          address: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Insert: {
+          id?: number;
+          first_name: string;
+          last_name: string;
+          ndis_number: number;
+          address: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: number;
+          first_name?: string;
+          last_name?: string;
+          ndis_number?: number;
+          address?: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
     };
     Functions: Record<string, never>;
     Views: Record<string, never>;

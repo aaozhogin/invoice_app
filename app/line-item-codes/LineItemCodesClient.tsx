@@ -619,72 +619,118 @@ export default function LineItemCodesClient() {
         </div>
       )}
 
-      <div style={{ marginTop: 20 }}>
-        <div className="records-table" role="table" aria-label="Line items">
-          <div className="records-header" role="row">
-            <div role="columnheader">Seq</div>
-            <div role="columnheader">Line Item Code</div>
-            <div role="columnheader">Category</div>
-            <div role="columnheader">Description</div>
-            <div role="columnheader">Time From</div>
-            <div role="columnheader">Time To</div>
-            <div role="columnheader">Max Rate</div>
-            <div role="columnheader">Billed Rate</div>
-            <div role="columnheader">Sleepover</div>
-            <div role="columnheader">Public Holiday</div>
-            <div role="columnheader" style={{ justifySelf: 'end' }}>
-              Actions
-            </div>
+      {/* Line Items Table */}
+      {items.length > 0 && (
+        <div className="line-items-table" style={{ marginTop: 20 }}>
+          {/* Header */}
+          <div className="line-items-header">
+            <div>Seq</div>
+            <div>Line Item Code</div>
+            <div>Category</div>
+            <div>Description</div>
+            <div>Time From</div>
+            <div>Time To</div>
+            <div>Max Rate</div>
+            <div>Billed Rate</div>
+            <div>Sleepover</div>
+            <div>Public Holiday</div>
+            <div>Actions</div>
           </div>
 
-          <div className="records-body" role="rowgroup">
-            {items.length === 0 ? (
-              <div className="no-records">No line items</div>
-            ) : (
-              <>
-                {items.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    className={`row ${draggedId === item.id ? 'dragging' : ''}`}
-                    role="row"
-                    draggable
-                    onDragStart={() => handleDragStart(item.id as number)}
-                    onDragOver={handleDragOver}
-                    onDrop={() => handleDrop(item.id as number)}
-                  >
-                    <div className="cell seq">{idx + 1}</div>
-                    <div className="cell">{item.code}</div>
-                    <div className="cell">{item.category}</div>
-                    <div className="cell desc-cell">{item.description ?? '—'}</div>
-                    <div className="cell">{item.time_from ?? '—'}</div>
-                    <div className="cell">{item.time_to ?? '—'}</div>
-                    <div className="cell">{item.max_rate ?? '—'}</div>
-                    <div className="cell">{item.billed_rate ?? '—'}</div>
-                    <div className="cell">{item.sleepover ? 'Yes' : 'No'}</div>
-                    <div className="cell">{item.public_holiday ? 'Yes' : 'No'}</div>
-                    <div className="cell actions-cell">
-                      <button
-                        className="edit-btn"
-                        title="Edit"
-                        onClick={() => handleEdit(item)}
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="trash"
-                        title="Delete"
-                        onClick={() => handleDelete(item.id as number)}
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
+          {/* Table Rows */}
+          {items.map((item, idx) => (
+            <div
+              key={item.id}
+              className={`line-items-row row ${draggedId === item.id ? 'dragging' : ''}`}
+              draggable
+              onDragStart={() => handleDragStart(item.id as number)}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(item.id as number)}
+            >
+              <div>{idx + 1}</div>
+              <div>{item.code}</div>
+              <div>{item.category}</div>
+              <div>{item.description ?? '—'}</div>
+              <div>{item.time_from ?? '—'}</div>
+              <div>{item.time_to ?? '—'}</div>
+              <div>{item.max_rate ?? '—'}</div>
+              <div>{item.billed_rate ?? '—'}</div>
+              <div>{item.sleepover ? 'Yes' : 'No'}</div>
+              <div>{item.public_holiday ? 'Yes' : 'No'}</div>
+              <div>
+                <button
+                  className="edit-btn"
+                  title="Edit"
+                  onClick={() => handleEdit(item)}
+                >
+                  ✏️
+                </button>
+                <button
+                  className="trash"
+                  title="Delete"
+                  onClick={() => handleDelete(item.id as number)}
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+
+      <style jsx>{`
+        .line-items-table {
+          display: grid;
+          gap: 1px;
+          background-color: var(--border);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        
+        .line-items-header,
+        .line-items-row {
+          display: grid;
+          grid-template-columns: 60px 160px 160px 1fr 120px 120px 80px 80px 80px 100px 80px;
+          gap: 1px;
+          background-color: var(--surface);
+        }
+        
+        .line-items-header {
+          font-weight: 600;
+          background-color: var(--surface-accent);
+        }
+        
+        .line-items-header > div,
+        .line-items-row > div {
+          padding: 8px 12px;
+          display: flex;
+          align-items: center;
+          background-color: inherit;
+          overflow-wrap: break-word;
+          word-break: break-word;
+        }
+        
+        .line-items-row {
+          cursor: grab;
+        }
+        
+        .line-items-row:hover {
+          background-color: var(--surface-hover);
+        }
+        
+        .line-items-row:active {
+          cursor: grabbing;
+        }
+        
+        .line-items-row > div:last-child {
+          justify-content: center;
+          align-self: center;
+        }
+        
+        .line-items-row.dragging {
+          background-color: var(--surface-accent);
+        }
+      `}</style>
     </div>
   );
 }
