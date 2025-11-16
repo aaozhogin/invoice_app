@@ -381,6 +381,54 @@ img, svg {
   padding-left: 0;
 }
 
+/* Weekday selection: radio button group */
+.weekday-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-left: 0;
+}
+
+.weekday-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  width: auto;
+}
+
+.weekday-option input[type="radio"] {
+  -webkit-appearance: radio;
+  appearance: radio;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  border: 1px solid #cfcfcf;
+  cursor: pointer;
+}
+
+.weekday-option input[type="radio"]:checked {
+  accent-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.weekday-option input[type="radio"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(125,211,252,0.06);
+}
+
+.weekday-option .weekday-label {
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .special-option {
   display: inline-flex;
   align-items: center;
@@ -1053,4 +1101,31 @@ input[type="number"] {
   .cal-year-view {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
+}
+
+/* Shift rectangles */
+.shift-rectangle {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.shift-rectangle:hover {
+  transform: translateX(2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.shift-rectangle.dragging {
+  transform: rotate(2deg);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+  z-index: 1000;
+}
+
+.resize-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.shift-rectangle:hover .resize-handle {
+  opacity: 1;
 }

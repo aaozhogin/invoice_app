@@ -1,0 +1,16 @@
+
+> my-app@1.0.0 dev
+> next dev
+
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.86.47:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 273ms
+ GET /calendar 200 in 600ms (compile: 533ms, render: 67ms)
+ GET /calendar 200 in 23ms (compile: 1483µs, render: 21ms)
+ GET /shifts 200 in 173ms (compile: 153ms, render: 19ms)
+ GET /shifts?id=37ae6f03-ddee-4507-b6b4-56b0aab43eb1&vscodeBrowserReqId=1763333072833 200 in 17ms (compile: 1112µs, render: 16ms)
+ GET /shifts 200 in 18ms (compile: 1725µs, render: 17ms)

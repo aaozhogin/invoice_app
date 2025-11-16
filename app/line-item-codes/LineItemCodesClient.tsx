@@ -184,6 +184,7 @@ export default function LineItemCodesClient() {
   const [activeTimeFrames, setActiveTimeFrames] = useState<string[]>([]);
   const activeOptions = ['Night rate', 'Day rate', 'Evening rate'];
 
+  const [weekdayType, setWeekdayType] = useState<'weekday' | 'saturday' | 'sunday'>('weekday');
   const [specialFlag, setSpecialFlag] = useState<'Sleepover' | 'Public Holiday' | null>(null);
 
   const [timeFrom, setTimeFrom] = useState<string>('');
@@ -251,14 +252,19 @@ export default function LineItemCodesClient() {
   const timeError = (() => {
     if (!formVisible || !timeFrom || !timeTo) return '';
     
-    // Allow timeTo = 00:00 (next day)
-    if (timeTo === '00:00') return '';
+    // Normalize time strings (remove seconds if present)
+    const normalizeTime = (time: string) => time.split(':').slice(0, 2).join(':');
+    const fromNorm = normalizeTime(timeFrom);
+    const toNorm = normalizeTime(timeTo);
     
     // If both are 00:00, it's a 24hr span - valid
-    if (timeFrom === '00:00' && timeTo === '00:00') return '';
+    if (fromNorm === '00:00' && toNorm === '00:00') return '';
+    
+    // Allow timeTo = 00:00 (next day) when timeFrom is not 00:00
+    if (toNorm === '00:00' && fromNorm !== '00:00') return '';
     
     // Otherwise timeFrom must be < timeTo
-    return timeFrom >= timeTo ? 'Time from must be before Time to' : '';
+    return fromNorm >= toNorm ? 'Time from must be before Time to (use 00:00 to 00:00 for 24 hours)' : '';
   })();
 
   const isAddDisabled =
@@ -279,6 +285,7 @@ export default function LineItemCodesClient() {
 
   const resetForm = () => {
     setForm({ code: '', category: '', description: '', maxRate: '', billedRate: '' });
+    setWeekdayType('weekday');
     setSpecialFlag(null);
     setTimeFrom('');
     setTimeTo('');
@@ -305,6 +312,9 @@ export default function LineItemCodesClient() {
       description: form.description || null,
       sleepover: specialFlag === 'Sleepover' ? true : false,
       public_holiday: specialFlag === 'Public Holiday' ? true : false,
+      weekday: weekdayType === 'weekday',
+      saturday: weekdayType === 'saturday',
+      sunday: weekdayType === 'sunday',
       time_from: finalTimeFrom || null,
       time_to: finalTimeTo || null,
       max_rate: max as number,
@@ -341,6 +351,7 @@ export default function LineItemCodesClient() {
       maxRate: item.max_rate?.toString() || '',
       billedRate: item.billed_rate?.toString() || '',
     });
+    setWeekdayType(item.saturday ? 'saturday' : item.sunday ? 'sunday' : 'weekday');
     setSpecialFlag(item.sleepover ? 'Sleepover' : item.public_holiday ? 'Public Holiday' : null);
     setTimeFrom(item.time_from || '');
     setTimeTo(item.time_to || '');
@@ -368,6 +379,9 @@ export default function LineItemCodesClient() {
       description: form.description || null,
       sleepover: specialFlag === 'Sleepover',
       public_holiday: specialFlag === 'Public Holiday',
+      weekday: weekdayType === 'weekday',
+      saturday: weekdayType === 'saturday',
+      sunday: weekdayType === 'sunday',
       time_from: finalTimeFrom || null,
       time_to: finalTimeTo || null,
       max_rate: max as number,
@@ -492,6 +506,42 @@ export default function LineItemCodesClient() {
                 setForm({ ...form, description: e.target.value })
               }
             />
+          </div>
+
+          <label className="label">Weekday type</label>
+          <div className="control weekday-options">
+            <label className="weekday-option">
+              <input
+                type="radio"
+                name="weekdayType"
+                value="weekday"
+                checked={weekdayType === 'weekday'}
+                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+              />
+              <span className="weekday-label">Weekday</span>
+            </label>
+
+            <label className="weekday-option">
+              <input
+                type="radio"
+                name="weekdayType"
+                value="saturday"
+                checked={weekdayType === 'saturday'}
+                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+              />
+              <span className="weekday-label">Saturday</span>
+            </label>
+
+            <label className="weekday-option">
+              <input
+                type="radio"
+                name="weekdayType"
+                value="sunday"
+                checked={weekdayType === 'sunday'}
+                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+              />
+              <span className="weekday-label">Sunday</span>
+            </label>
           </div>
 
           <label className="label">Special flag</label>
@@ -628,6 +678,7 @@ export default function LineItemCodesClient() {
             <div>Line Item Code</div>
             <div>Category</div>
             <div>Description</div>
+            <div>Weekday Type</div>
             <div>Time From</div>
             <div>Time To</div>
             <div>Max Rate</div>
@@ -651,6 +702,7 @@ export default function LineItemCodesClient() {
               <div>{item.code}</div>
               <div>{item.category}</div>
               <div>{item.description ?? '—'}</div>
+              <div>{item.saturday ? 'Saturday' : item.sunday ? 'Sunday' : 'Weekday'}</div>
               <div>{item.time_from ?? '—'}</div>
               <div>{item.time_to ?? '—'}</div>
               <div>{item.max_rate ?? '—'}</div>
@@ -690,7 +742,7 @@ export default function LineItemCodesClient() {
         .line-items-header,
         .line-items-row {
           display: grid;
-          grid-template-columns: 60px 160px 160px 1fr 120px 120px 80px 80px 80px 100px 80px;
+          grid-template-columns: 60px 160px 160px 1fr 100px 120px 120px 80px 80px 80px 100px 80px;
           gap: 1px;
           background-color: var(--surface);
         }

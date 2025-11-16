@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
 import { Database } from '../lib/types/supabase';
 
-type Carer = Database['public']['Tables']['carers']['Row'];
+type Carer = Database['public']['Tables']['carers']['Row'] & {
+  color?: string; // Optional since the column might not exist in the database yet
+};
 
 interface CarerForm {
   firstName: string;
@@ -16,7 +18,19 @@ interface CarerForm {
   accountName: string;
   bsb: string;
   accountNumber: string;
+  color: string;
 }
+
+const CARER_COLORS = [
+  { name: 'Blue', value: '#3b82f6', bg: 'rgba(59, 130, 246, 0.7)' },
+  { name: 'Green', value: '#22c55e', bg: 'rgba(34, 197, 94, 0.7)' },
+  { name: 'Purple', value: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.7)' },
+  { name: 'Pink', value: '#ec4899', bg: 'rgba(236, 72, 153, 0.7)' },
+  { name: 'Orange', value: '#f97316', bg: 'rgba(249, 115, 22, 0.7)' },
+  { name: 'Red', value: '#ef4444', bg: 'rgba(239, 68, 68, 0.7)' },
+  { name: 'Teal', value: '#14b8a6', bg: 'rgba(20, 184, 166, 0.7)' },
+  { name: 'Indigo', value: '#6366f1', bg: 'rgba(99, 102, 241, 0.7)' }
+];
 
 export default function CarersClient() {
   const [carers, setCarers] = useState<Carer[]>([]);
@@ -35,6 +49,7 @@ export default function CarersClient() {
     accountName: '',
     bsb: '',
     accountNumber: '',
+    color: CARER_COLORS[0].value, // Default to first color
   });
 
   const [supabase] = useState(() => getSupabaseClient());
@@ -124,6 +139,7 @@ export default function CarersClient() {
       accountName: '',
       bsb: '',
       accountNumber: '',
+      color: CARER_COLORS[0].value,
     });
     setLogoFile(null);
     setLogoPreview(null);
@@ -174,7 +190,8 @@ export default function CarersClient() {
       logoUrl = await uploadLogo(logoFile);
     }
 
-    const carerData = {
+    // Create carer data, excluding color if the column doesn't exist
+    const carerData: any = {
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
       address: form.address.trim(),
@@ -186,6 +203,11 @@ export default function CarersClient() {
       account_number: form.accountNumber.trim(),
       logo_url: logoUrl,
     };
+
+    // Only include color if we know the column exists
+    if (carers.length > 0 && 'color' in carers[0]) {
+      carerData.color = form.color;
+    }
 
     const { data, error } = await supabase
       .from('carers')
@@ -217,6 +239,7 @@ export default function CarersClient() {
       accountName: carer.account_name,
       bsb: carer.bsb,
       accountNumber: carer.account_number,
+      color: (carer as any).color || CARER_COLORS[0].value, // Use existing color or default
     });
     setEditingId(carer.id);
     setLogoPreview(carer.logo_url);
@@ -231,7 +254,8 @@ export default function CarersClient() {
       logoUrl = await uploadLogo(logoFile);
     }
 
-    const updateData = {
+    // Create update data, excluding color if the column doesn't exist
+    const updateData: any = {
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
       address: form.address.trim(),
@@ -243,6 +267,11 @@ export default function CarersClient() {
       account_number: form.accountNumber.trim(),
       logo_url: logoUrl,
     };
+
+    // Only include color if we know the column exists
+    if (carers.length > 0 && 'color' in carers[0]) {
+      updateData.color = form.color;
+    }
 
     const { data, error } = await supabase
       .from('carers')
@@ -489,6 +518,58 @@ export default function CarersClient() {
             {accountNumberError && <div className="field-error">{accountNumberError}</div>}
           </div>
 
+          <label htmlFor="carerColor" className="label">
+            Color
+          </label>
+          <div className="control">
+            {(!carers.length || !('color' in carers[0])) && (
+              <div style={{ 
+                padding: '8px', 
+                backgroundColor: '#fef3c7', 
+                border: '1px solid #f59e0b', 
+                borderRadius: '4px', 
+                marginBottom: '8px',
+                fontSize: '0.9em'
+              }}>
+                ⚠️ Color column missing in database. Please add it via Supabase dashboard:
+                <code style={{ display: 'block', marginTop: '4px', padding: '4px', backgroundColor: '#fff', fontSize: '0.8em' }}>
+                  ALTER TABLE carers ADD COLUMN color TEXT DEFAULT '#22c55e';
+                </code>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {CARER_COLORS.map((colorOption) => (
+                <button
+                  key={colorOption.value}
+                  type="button"
+                  data-color-picker
+                  data-selected={form.color === colorOption.value ? 'true' : undefined}
+                  onClick={() => setForm(prev => ({ ...prev, color: colorOption.value }))}
+                  style={{
+                    '--picker-color': colorOption.value,
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '12px',
+                    outline: 'none'
+                  } as React.CSSProperties}
+                  title={colorOption.name}
+                >
+                  {form.color === colorOption.value ? '✓' : ''}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+              Selected: {CARER_COLORS.find(c => c.value === form.color)?.name || 'Unknown'}
+            </div>
+          </div>
+
           {/* Action Buttons */}
           <div></div>
           <div className="actions">
@@ -517,12 +598,13 @@ export default function CarersClient() {
         <div className="carers-table" style={{ marginTop: '2rem' }}>
           {/* Header */}
           <div className="carers-header">
-            <div>Seq</div>
+            <div>No</div>
             <div>Name</div>
             <div>Address</div>
             <div>Phone</div>
             <div>Email</div>
             <div>ABN</div>
+            <div>Color</div>
             <div>Bank Details</div>
             <div>Logo</div>
             <div>Actions</div>
@@ -547,6 +629,32 @@ export default function CarersClient() {
               <div>{carer.phone_number}</div>
               <div style={{ fontSize: '0.9em', wordBreak: 'break-all' }}>{carer.email}</div>
               <div>{carer.abn}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {carer.color ? (
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      backgroundColor: carer.color,
+                      borderRadius: '4px',
+                      border: '1px solid #ccc'
+                    }}
+                    title={CARER_COLORS.find(c => c.value === carer.color)?.name || 'Custom Color'}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      backgroundColor: '#22c55e',
+                      borderRadius: '4px',
+                      border: '1px solid #ccc',
+                      opacity: 0.5
+                    }}
+                    title="Default color (database column missing)"
+                  />
+                )}
+              </div>
               <div style={{ fontSize: '0.85em', lineHeight: '1.2' }}>
                 <div><strong>Account:</strong> {carer.account_name}</div>
                 <div><strong>BSB:</strong> {carer.bsb}</div>
@@ -596,7 +704,7 @@ export default function CarersClient() {
         .carers-header,
         .carers-row {
           display: grid;
-          grid-template-columns: 50px minmax(150px, 1fr) minmax(200px, 2fr) minmax(120px, 1fr) minmax(180px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) 60px 100px;
+          grid-template-columns: 50px minmax(150px, 1fr) minmax(200px, 2fr) minmax(120px, 1fr) minmax(180px, 1.5fr) minmax(100px, 1fr) 60px minmax(150px, 1.2fr) 60px 100px;
           gap: 1px;
           background-color: var(--surface);
         }
@@ -633,18 +741,18 @@ export default function CarersClient() {
           align-self: center;
         }
         
-        @media (max-width: 1400px) {
+        @media (max-width: 1200px) {
           .carers-header,
           .carers-row {
-            grid-template-columns: 40px minmax(120px, 1fr) minmax(150px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) minmax(80px, 0.8fr) minmax(120px, 1fr) 50px 80px;
+            grid-template-columns: 40px minmax(120px, 1fr) minmax(150px, 1.5fr) minmax(100px, 1fr) minmax(150px, 1.2fr) minmax(80px, 0.8fr) 50px minmax(120px, 1fr) 50px 80px;
             font-size: 0.9em;
           }
         }
         
-        @media (max-width: 1200px) {
+        @media (max-width: 1000px) {
           .carers-header,
           .carers-row {
-            grid-template-columns: 35px minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(130px, 1fr) minmax(70px, 0.7fr) minmax(100px, 1fr) 45px 70px;
+            grid-template-columns: 35px minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(130px, 1fr) minmax(70px, 0.7fr) 45px minmax(100px, 1fr) 45px 70px;
             font-size: 0.85em;
           }
         }
@@ -652,9 +760,22 @@ export default function CarersClient() {
         @media (max-width: 900px) {
           .carers-header,
           .carers-row {
-            grid-template-columns: 30px 1fr 1.2fr 0.8fr 1fr 0.6fr 1fr 40px 60px;
+            grid-template-columns: 30px 1fr 1.2fr 0.8fr 1fr 0.6fr 40px 1fr 40px 60px;
             font-size: 0.8em;
           }
+        }
+        
+        /* Color picker button styles - override any global button styles */
+        button[data-color-picker] {
+          background: var(--picker-color) !important;
+          background-image: none !important;
+          background-color: var(--picker-color) !important;
+          box-shadow: none !important;
+          border: 2px solid #ccc !important;
+        }
+        
+        button[data-color-picker][data-selected] {
+          border: 3px solid #000 !important;
         }
         `}</style>
     </div>

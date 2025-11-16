@@ -17,6 +17,10 @@ export type Database = {
           public_holiday: boolean | null;
           time_from: string | null; // SQL time represented as string in JS
           time_to: string | null;
+          // weekday filtering columns
+          weekday: boolean | null;
+          saturday: boolean | null;
+          sunday: boolean | null;
         };
         Insert: {
           id?: number;
@@ -31,6 +35,10 @@ export type Database = {
           public_holiday?: boolean | null;
           time_from?: string | null;
           time_to?: string | null;
+          // weekday filtering columns
+          weekday?: boolean | null;
+          saturday?: boolean | null;
+          sunday?: boolean | null;
         };
         Update: {
           id?: number;
@@ -44,6 +52,10 @@ export type Database = {
           public_holiday?: boolean | null;
           time_from?: string | null;
           time_to?: string | null;
+          // weekday filtering columns
+          weekday?: boolean | null;
+          saturday?: boolean | null;
+          sunday?: boolean | null;
         };
       };
       carers: {
@@ -122,9 +134,49 @@ export type Database = {
           updated_at?: string | null;
         };
       };
+      shifts: {
+        Row: {
+          id: number;
+          time_from: string;
+          time_to: string;
+          carer_id: number;
+          line_item_code_id: number;
+          cost: number;
+          shift_date: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Insert: {
+          id?: number;
+          time_from: string;
+          time_to: string;
+          carer_id: number;
+          line_item_code_id: number;
+          cost: number;
+          shift_date: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: number;
+          time_from?: string;
+          time_to?: string;
+          carer_id?: number;
+          line_item_code_id?: number;
+          cost?: number;
+          shift_date?: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
     };
     Functions: Record<string, never>;
     Views: Record<string, never>;
     Enums: Record<string, never>;
   };
 };
+
+// Convenient type exports
+export type LineItem = Database['public']['Tables']['line_items']['Row'];
+export type Carer = Database['public']['Tables']['carers']['Row'];
+export type Shift = Database['public']['Tables']['shifts']['Row'];

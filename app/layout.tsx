@@ -19,6 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/calendar" className="nav-link">
               Calendar
             </Link>
+            <Link href="/shifts" className="nav-link">
+              Shifts
+            </Link>
             <Link href="/carers" className="nav-link">
               Carers
             </Link>
