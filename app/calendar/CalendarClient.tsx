@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { getSupabaseClient } from '@/app/lib/supabaseClient'
+import { useCalendarSidebar } from '@/app/CalendarSidebarContext'
 
 interface Shift {
   id: number
@@ -41,6 +42,7 @@ interface LineItemCode {
   saturday?: boolean | null
   sunday?: boolean | null
   sleepover?: boolean | null
+  public_holiday?: boolean | null
 }
 
 interface Client {
@@ -72,16 +74,27 @@ interface NewShift {
   client_id: number | null
   category: string | null
   line_item_code_id: string | null
+  is_sleepover: boolean
+  is_public_holiday: boolean
 }
 
 export default function CalendarClient() {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null)
+  const [showCopyDayDialog, setShowCopyDayDialog] = useState(false)
+  const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
+  const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
+  const [copyDayError, setCopyDayError] = useState<string | null>(null)
   const [carers, setCarers] = useState<Carer[]>([])
   const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [shifts, setShifts] = useState<Shift[]>([]) // Add shifts state
+  const [rangeShifts, setRangeShifts] = useState<Shift[]>([])
   const [editingShift, setEditingShift] = useState<Shift | null>(null)
+  const { setCarerTotals, setOverlapSummary } = useCalendarSidebar()
   
   // Drag and resize state
   const [dragState, setDragState] = useState<{
@@ -114,14 +127,16 @@ export default function CalendarClient() {
     carer_id: null,
     client_id: null,
     category: null,
-    line_item_code_id: null
+    line_item_code_id: null,
+    is_sleepover: false,
+    is_public_holiday: false
   })
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchData()
-  }, [currentDate])
+  }, [currentDate, dateFrom, dateTo])
 
   // Effect for drag event listeners
   useEffect(() => {
@@ -230,19 +245,27 @@ export default function CalendarClient() {
       const supabase = getSupabaseClient()
       console.log('✅ Supabase client created')
       
-      const [carersRes, lineItemCodesRes, clientsRes, shiftsRes] = await Promise.all([
+      const dayYmd = toYmdLocal(currentDate)
+      const rangeFrom = dateFrom || dayYmd
+      const rangeTo = dateTo || dayYmd
+
+      const [carersRes, lineItemCodesRes, clientsRes, shiftsRes, rangeShiftsRes] = await Promise.all([
         supabase.from('carers').select('*, color').order('first_name'),
-        supabase.from('line_items').select('id, code, category, description, time_from, time_to, billed_rate, weekday, saturday, sunday, sleepover').order('category'),
+        supabase.from('line_items').select('id, code, category, description, time_from, time_to, billed_rate, weekday, saturday, sunday, sleepover, public_holiday').order('category'),
         supabase.from('clients').select('*').order('first_name'),
         // Use a simplified query without the problematic clients join
         supabase.from('shifts').select(`
           *, 
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
-        `).eq('shift_date', currentDate.toISOString().split('T')[0]).order('time_from')
+        `).eq('shift_date', dayYmd).order('time_from'),
+        supabase.from('shifts').select(`
+          *,
+          carers(id, first_name, last_name, email, color)
+        `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
       ])
 
-      console.log('📊 Raw responses:', { carersRes, lineItemCodesRes, clientsRes, shiftsRes })
+      console.log('📊 Raw responses:', { carersRes, lineItemCodesRes, clientsRes, shiftsRes, rangeShiftsRes })
 
       if (carersRes.error) {
         console.error('❌ Carers error:', carersRes.error)
@@ -259,6 +282,10 @@ export default function CalendarClient() {
       if (shiftsRes.error) {
         console.error('❌ Shifts error:', shiftsRes.error)
         throw shiftsRes.error
+      }
+      if (rangeShiftsRes.error) {
+        console.error('❌ Range shifts error:', rangeShiftsRes.error)
+        throw rangeShiftsRes.error
       }
 
       console.log('✅ Setting state with data:', {
@@ -280,6 +307,12 @@ export default function CalendarClient() {
       }))
       
       setShifts(shiftsWithClients)
+
+      setRangeShifts(rangeShiftsRes.data || [])
+
+      const { carerTotals, overlapSummary } = computeSidebarAggregates(rangeShiftsRes.data || [])
+      setCarerTotals(carerTotals)
+      setOverlapSummary(carerTotals.length === 0 ? null : overlapSummary)
       
       console.log('📊 Loaded shifts data:', shiftsWithClients)
       console.log('📊 Sample shift:', JSON.stringify(shiftsWithClients?.[0], null, 2))
@@ -303,19 +336,117 @@ export default function CalendarClient() {
     }
   }
 
+  const toYmdLocal = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const parseYmdToLocalDate = (ymd: string): Date => {
+    return new Date(`${ymd}T00:00:00`)
+  }
+
+  const normalizeDateInput = (raw: string): string => {
+    const trimmed = raw.trim()
+    if (!trimmed) return ''
+    // Standard HTML date input value
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+
+    // Fallback for browsers that treat type=date as text (common formats)
+    const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (dmy) {
+      const dd = dmy[1].padStart(2, '0')
+      const mm = dmy[2].padStart(2, '0')
+      const yyyy = dmy[3]
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    const ymdSlash = trimmed.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+    if (ymdSlash) {
+      const yyyy = ymdSlash[1]
+      const mm = ymdSlash[2].padStart(2, '0')
+      const dd = ymdSlash[3].padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    }
+
+    return ''
+  }
+
+  useEffect(() => {
+    try {
+      const storedFrom = localStorage.getItem('calendar.dateFrom') || ''
+      const storedTo = localStorage.getItem('calendar.dateTo') || ''
+
+      // Basic sanity check: values should be YYYY-MM-DD; otherwise ignore
+      const isYmd = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+      const nextFrom = isYmd(storedFrom) ? storedFrom : ''
+      const nextTo = isYmd(storedTo) ? storedTo : ''
+
+      if (nextFrom) setDateFrom(nextFrom)
+      if (nextTo) setDateTo(nextTo)
+
+      // Enforce Date to > Date from on restore
+      if (nextFrom && nextTo && nextTo <= nextFrom) {
+        setDateTo('')
+        localStorage.removeItem('calendar.dateTo')
+      }
+    } catch {
+      // ignore (private mode / blocked storage)
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (dateFrom) localStorage.setItem('calendar.dateFrom', dateFrom)
+      else localStorage.removeItem('calendar.dateFrom')
+
+      if (dateTo) localStorage.setItem('calendar.dateTo', dateTo)
+      else localStorage.removeItem('calendar.dateTo')
+    } catch {
+      // ignore
+    }
+  }, [dateFrom, dateTo])
+
+  const buildUtcIsoFromLocal = (ymd: string, hhmm: string): string => {
+    const [year, month, day] = ymd.split('-').map(Number)
+    const [hour, minute] = hhmm.split(':').map(Number)
+    const dt = new Date(year, month - 1, day, hour, minute, 0, 0)
+    return dt.toISOString()
+  }
+
+  const addDaysToYmd = (ymd: string, days: number): string => {
+    const d = parseYmdToLocalDate(ymd)
+    d.setDate(d.getDate() + days)
+    return toYmdLocal(d)
+  }
+
+  useEffect(() => {
+    if (!dateFrom && !dateTo) return
+
+    const currentYmd = toYmdLocal(currentDate)
+    if (dateFrom && currentYmd < dateFrom) {
+      setCurrentDate(parseYmdToLocalDate(dateFrom))
+    }
+    if (dateTo && currentYmd > dateTo) {
+      setCurrentDate(parseYmdToLocalDate(dateTo))
+    }
+  }, [dateFrom, dateTo])
+
   // Convert time string (HH:mm:ss or timestamp) to Y position
   const getYFromTime = (timeStr: string): number => {
-    let timeOnly: string
-    
-    // Handle both timestamp format (2024-01-01T14:30:00) and time format (14:30:00)
-    if (timeStr.includes('T')) {
-      timeOnly = timeStr.split('T')[1].split('.')[0] // Extract time part and remove milliseconds
-    } else {
-      timeOnly = timeStr
+    // Prefer Date parsing when the value includes a date (timestamptz from DB)
+    if (/^\d{4}-\d{2}-\d{2}[T\s]/.test(timeStr)) {
+      const dt = new Date(timeStr)
+      if (!isNaN(dt.getTime())) {
+        const totalMinutes = dt.getHours() * 60 + dt.getMinutes()
+        return (totalMinutes / 15) * 15
+      }
     }
-    
-    const [hours, minutes] = timeOnly.split(':').map(Number)
-    const totalMinutes = hours * 60 + minutes
+
+    // Fallback: treat as HH:mm(:ss)
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    const totalMinutes = (hours || 0) * 60 + (minutes || 0)
     return (totalMinutes / 15) * 15 // Convert to Y position (15px per quarter hour)
   }
 
@@ -397,26 +528,36 @@ export default function CalendarClient() {
     setDragEnd(constrainedY)
   }
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
     if (!isDragging) return
-    
+
+    // Capture the final mouse position on mouse-up to avoid relying on a possibly stale dragEnd.
+    let finalY = dragEnd
+    if (timelineRef.current) {
+      const rect = timelineRef.current.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      finalY = Math.max(0, Math.min(y, HOUR_HEIGHT * 24))
+    }
+
     setIsDragging(false)
-    
-    const startY = Math.min(dragStart, dragEnd)
-    const endY = Math.max(dragStart, dragEnd)
+
+    const startY = Math.min(dragStart, finalY)
+    const endY = Math.max(dragStart, finalY)
     const adjustedEndY = Math.max(endY, startY + QUARTER_HOUR_HEIGHT)
     
     const startTime = getTimeFromY(startY)
     const endTime = getTimeFromY(adjustedEndY)
     
     setNewShift({
-      shift_date: currentDate.toISOString().split('T')[0],
+      shift_date: toYmdLocal(currentDate),
       start_time: startTime,
       end_time: endTime,
       carer_id: null,
       client_id: null,
       category: null,
-      line_item_code_id: null
+      line_item_code_id: null,
+      is_sleepover: false,
+      is_public_holiday: false
     })
     
     setError(null) // Clear any previous errors when opening dialog
@@ -429,6 +570,455 @@ export default function CalendarClient() {
     if (dayOfWeek === 0) return 'sunday'
     if (dayOfWeek === 6) return 'saturday'
     return 'weekday'
+  }
+
+  const lineItemMatchesDayType = (li: LineItemCode, dayType: 'weekday' | 'saturday' | 'sunday') => {
+    // If weekday fields are null (before DB migration), treat as weekday items
+    switch (dayType) {
+      case 'weekday':
+        return li.weekday === true || (li.weekday == null && li.saturday !== true && li.sunday !== true)
+      case 'saturday':
+        return li.saturday === true
+      case 'sunday':
+        return li.sunday === true
+      default:
+        return false
+    }
+  }
+
+  const getDayTypeFromYmd = (ymd: string): 'weekday' | 'saturday' | 'sunday' => {
+    const d = parseYmdToLocalDate(ymd)
+    return getDayType(d)
+  }
+
+  const listDaysInclusive = (fromYmd: string, toYmd: string): string[] => {
+    const days: string[] = []
+    if (!fromYmd || !toYmd) return days
+    if (toYmd < fromYmd) return days
+
+    const cursor = parseYmdToLocalDate(fromYmd)
+    const end = parseYmdToLocalDate(toYmd)
+    while (toYmdLocal(cursor) <= toYmdLocal(end)) {
+      days.push(toYmdLocal(cursor))
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return days
+  }
+
+  const isoToLocalHhmm = (iso: string): string => {
+    const dt = new Date(iso)
+    if (isNaN(dt.getTime())) return '00:00'
+    return dt.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
+  }
+
+  function computeSidebarAggregates(range: Shift[]) {
+    const totalsMap = new Map<
+      number,
+      { carerId: number; firstName: string; lastName: string; totalCost: number; totalHours: number }
+    >()
+
+    for (const s of range || []) {
+      const carer = (s as any).carers as Carer | undefined
+      const carerId = s.carer_id
+      const existing = totalsMap.get(carerId)
+      const cost = typeof s.cost === 'number' ? s.cost : Number((s as any).cost || 0)
+
+      const from = new Date(s.time_from)
+      const to = new Date(s.time_to)
+      const durationMs =
+        !isNaN(from.getTime()) && !isNaN(to.getTime()) ? Math.max(0, to.getTime() - from.getTime()) : 0
+      const hours = durationMs / (60 * 60 * 1000)
+
+      if (!existing) {
+        totalsMap.set(carerId, {
+          carerId,
+          firstName: carer?.first_name || '',
+          lastName: carer?.last_name || '',
+          totalCost: isNaN(cost) ? 0 : cost,
+          totalHours: isNaN(hours) ? 0 : hours,
+        })
+      } else {
+        existing.totalCost += isNaN(cost) ? 0 : cost
+        existing.totalHours += isNaN(hours) ? 0 : hours
+      }
+    }
+
+    const carerTotals = Array.from(totalsMap.values())
+      .map((t) => ({
+        carerId: t.carerId,
+        name: `${t.firstName} ${t.lastName}`.trim() || `Carer ${t.carerId}`,
+        totalCost: Math.round(t.totalCost * 100) / 100,
+        totalHours: Math.round(t.totalHours * 100) / 100,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+
+    // Overlap summary across all shifts in the range
+    type Event = { t: number; kind: 'start' | 'end'; ratePerMs: number }
+    const events: Event[] = []
+
+    for (const s of range || []) {
+      const from = new Date(s.time_from)
+      const to = new Date(s.time_to)
+      const start = from.getTime()
+      const end = to.getTime()
+      if (isNaN(start) || isNaN(end) || end <= start) continue
+
+      const cost = typeof s.cost === 'number' ? s.cost : Number((s as any).cost || 0)
+      const durationMs = end - start
+      const ratePerMs = durationMs > 0 && Number.isFinite(cost) ? cost / durationMs : 0
+
+      events.push({ t: start, kind: 'start', ratePerMs })
+      events.push({ t: end, kind: 'end', ratePerMs })
+    }
+
+    events.sort((a, b) => {
+      if (a.t !== b.t) return a.t - b.t
+      // process ends before starts at the same timestamp
+      if (a.kind === b.kind) return 0
+      return a.kind === 'end' ? -1 : 1
+    })
+
+    let activeCount = 0
+    let activeRateSum = 0
+    let overlapMs = 0
+    let overlapCost = 0
+    let prevT: number | null = null
+
+    let i = 0
+    while (i < events.length) {
+      const t = events[i].t
+
+      if (prevT !== null && t > prevT) {
+        const segMs = t - prevT
+        if (activeCount >= 2) {
+          overlapMs += segMs
+          overlapCost += segMs * activeRateSum
+        }
+      }
+
+      // apply all events at time t
+      while (i < events.length && events[i].t === t) {
+        const ev = events[i]
+        if (ev.kind === 'end') {
+          activeCount = Math.max(0, activeCount - 1)
+          activeRateSum -= ev.ratePerMs
+        } else {
+          activeCount += 1
+          activeRateSum += ev.ratePerMs
+        }
+        i++
+      }
+
+      prevT = t
+    }
+
+    const overlapHours = Math.round((overlapMs / (60 * 60 * 1000)) * 100) / 100
+    const overlapCostRounded = Math.round(overlapCost * 100) / 100
+
+    return {
+      carerTotals,
+      overlapSummary: {
+        overlapHours,
+        overlapCost: overlapCostRounded,
+      },
+    }
+  }
+
+  const getLocalSpanMinutesForShift = (shift: Shift): { startMin: number; endMin: number } => {
+    const from = new Date(shift.time_from)
+    const to = new Date(shift.time_to)
+
+    const startMin = !isNaN(from.getTime()) ? from.getHours() * 60 + from.getMinutes() : 0
+    let endMin = !isNaN(to.getTime()) ? to.getHours() * 60 + to.getMinutes() : startMin + 15
+
+    if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+      const startDay = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()
+      const endDay = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime()
+      const dayDiff = Math.round((endDay - startDay) / (24 * 60 * 60 * 1000))
+      if (dayDiff > 0) {
+        endMin += dayDiff * 24 * 60
+      } else if (endMin <= startMin) {
+        // defensive: treat as overnight
+        endMin += 24 * 60
+      }
+    } else {
+      if (endMin <= startMin) endMin = startMin + 15
+    }
+
+    return { startMin, endMin }
+  }
+
+  const computeOverlapLayout = (dayShifts: Shift[]) => {
+    type Item = { id: number; startMin: number; endMin: number }
+    const items: Item[] = (dayShifts || []).map((s) => {
+      const span = getLocalSpanMinutesForShift(s)
+      return { id: s.id, startMin: span.startMin, endMin: span.endMin }
+    })
+
+    items.sort((a, b) => {
+      if (a.startMin !== b.startMin) return a.startMin - b.startMin
+      return b.endMin - a.endMin
+    })
+
+    const layout = new Map<number, { col: number; colCount: number }>()
+
+    // Connected components for interval graph can be found by scanning union of intervals.
+    const components: Array<{ startIdx: number; endIdx: number }> = []
+    let compStart = 0
+    let compEnd = -1
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i]
+      if (compEnd < 0) {
+        compStart = i
+        compEnd = it.endMin
+      } else if (it.startMin > compEnd) {
+        components.push({ startIdx: compStart, endIdx: i - 1 })
+        compStart = i
+        compEnd = it.endMin
+      } else {
+        compEnd = Math.max(compEnd, it.endMin)
+      }
+    }
+    if (items.length > 0) {
+      components.push({ startIdx: compStart, endIdx: items.length - 1 })
+    }
+
+    for (const comp of components) {
+      const slice = items.slice(comp.startIdx, comp.endIdx + 1)
+
+      // Max concurrency within this component
+      const events: Array<{ t: number; kind: 'start' | 'end' }> = []
+      for (const it of slice) {
+        events.push({ t: it.startMin, kind: 'start' })
+        events.push({ t: it.endMin, kind: 'end' })
+      }
+      events.sort((a, b) => {
+        if (a.t !== b.t) return a.t - b.t
+        if (a.kind === b.kind) return 0
+        return a.kind === 'end' ? -1 : 1
+      })
+      let active = 0
+      let maxActive = 0
+      for (const e of events) {
+        if (e.kind === 'end') active = Math.max(0, active - 1)
+        else active += 1
+        maxActive = Math.max(maxActive, active)
+      }
+      const colCount = Math.max(1, maxActive)
+
+      // Greedy column assignment
+      const activeCols: Array<{ endMin: number; col: number }> = []
+      const used = new Set<number>()
+
+      for (const it of slice) {
+        // free columns that have ended
+        for (let j = activeCols.length - 1; j >= 0; j--) {
+          if (activeCols[j].endMin <= it.startMin) {
+            used.delete(activeCols[j].col)
+            activeCols.splice(j, 1)
+          }
+        }
+
+        let col = 0
+        while (used.has(col)) col++
+        used.add(col)
+        activeCols.push({ endMin: it.endMin, col })
+
+        layout.set(it.id, { col, colCount })
+      }
+    }
+
+    return layout
+  }
+
+  const dayLayout = useMemo(() => computeOverlapLayout(shifts), [shifts])
+
+  const pickLineItemForShift = (opts: {
+    category: string
+    dayType: 'weekday' | 'saturday' | 'sunday'
+    isSleepover: boolean
+    isPublicHoliday: boolean
+  }): LineItemCode | null => {
+    const matchingForShift = lineItemCodes
+      .filter(li => li.category === opts.category)
+      .filter(li => lineItemMatchesDayType(li, opts.dayType))
+
+    const pick = (items: LineItemCode[]) =>
+      items
+        .slice()
+        .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0] || null
+
+    if (opts.isSleepover) return pick(matchingForShift.filter(li => li.sleepover === true))
+    if (opts.isPublicHoliday) return pick(matchingForShift.filter(li => li.public_holiday === true && li.sleepover !== true))
+    return pick(matchingForShift.filter(li => li.public_holiday !== true && li.sleepover !== true))
+  }
+
+  const computeCostForShiftParams = (opts: {
+    shiftDateYmd: string
+    category: string
+    startTime: string
+    endTime: string
+    isSleepover: boolean
+    isPublicHoliday: boolean
+  }): number => {
+    const dayType = getDayTypeFromYmd(opts.shiftDateYmd)
+
+    const parseToMinutes = (t: string) => {
+      const [h, m] = t.split(':').map(Number)
+      return h * 60 + m
+    }
+
+    let selStart = parseToMinutes(opts.startTime)
+    let selEnd = parseToMinutes(opts.endTime)
+    if (selEnd <= selStart) selEnd += 24 * 60
+
+    const baseMatchingLineItems = lineItemCodes.filter(li => {
+      if (li.category !== opts.category) return false
+      return lineItemMatchesDayType(li, dayType)
+    })
+
+    if (opts.isSleepover) {
+      const sleepoverItem = baseMatchingLineItems.filter(li => li.sleepover === true)[0]
+      const rate = (sleepoverItem?.billed_rate as unknown as number) || 0
+      return Math.round(rate * 100) / 100
+    }
+
+    const matchingLineItems = baseMatchingLineItems.filter(li => {
+      if (opts.isPublicHoliday) return li.public_holiday === true && li.sleepover !== true
+      return li.public_holiday !== true && li.sleepover !== true
+    })
+
+    let total = 0
+    for (const li of matchingLineItems) {
+      if (!li.time_from || !li.time_to) continue
+
+      let liStart = parseToMinutes(li.time_from)
+      let liEnd = parseToMinutes(li.time_to)
+      if (liEnd <= liStart) liEnd += 24 * 60
+
+      const overlapStart = Math.max(selStart, liStart)
+      const overlapEnd = Math.min(selEnd, liEnd)
+      const overlapMinutes = Math.max(0, overlapEnd - overlapStart)
+      if (overlapMinutes <= 0) continue
+
+      const hours = Math.round((overlapMinutes / 60) * 100) / 100
+      const rate = (li.billed_rate as unknown as number) || 0
+      total += Math.round(hours * rate * 100) / 100
+    }
+
+    return Math.round(total * 100) / 100
+  }
+
+  const handleConfirmCopyDay = async () => {
+    const srcYmd = toYmdLocal(currentDate)
+    if (!dateFrom || !dateTo) {
+      setCopyDayError('Set Date from and Date to first')
+      return
+    }
+    if (copyDaySelected.length === 0) {
+      setCopyDayError('Select at least one day')
+      return
+    }
+
+    // Use the shifts already loaded for the current day
+    const sourceShifts = shifts
+    if (sourceShifts.length === 0) {
+      setCopyDayError('No shifts on the current day to copy')
+      return
+    }
+
+    setCopyDayIsWorking(true)
+    setCopyDayError(null)
+
+    try {
+      const supabase = getSupabaseClient()
+
+      const inserts: any[] = []
+
+      for (const targetYmd of copyDaySelected) {
+        for (const s of sourceShifts) {
+          const lineItemId = String((s as any).line_item_code_id ?? '')
+          const li = lineItemCodes.find(x => x.id === lineItemId)
+
+          const category = (s as any).line_items?.category || li?.category
+          if (!category) continue
+
+          const isSleepover = !!li?.sleepover
+          const isPublicHoliday = !!li?.public_holiday
+
+          const startTime = isoToLocalHhmm(s.time_from)
+          const endTime = isoToLocalHhmm(s.time_to)
+
+          const dayType = getDayTypeFromYmd(targetYmd)
+          const targetLineItem = pickLineItemForShift({
+            category,
+            dayType,
+            isSleepover,
+            isPublicHoliday
+          })
+
+          if (!targetLineItem) {
+            throw new Error(
+              isSleepover
+                ? `No sleepover line item found for ${category} (${dayType})`
+                : isPublicHoliday
+                  ? `No public holiday line item found for ${category} (${dayType})`
+                  : `No standard line item found for ${category} (${dayType})`
+            )
+          }
+
+          const startDateTime = buildUtcIsoFromLocal(targetYmd, startTime)
+          let endDateTime = buildUtcIsoFromLocal(targetYmd, endTime)
+
+          const [startHour, startMin] = startTime.split(':').map(Number)
+          const [endHour, endMin] = endTime.split(':').map(Number)
+          const startMinutes = startHour * 60 + startMin
+          const endMinutes = endHour * 60 + endMin
+          if (endMinutes <= startMinutes) {
+            const nextDayStr = addDaysToYmd(targetYmd, 1)
+            endDateTime = buildUtcIsoFromLocal(nextDayStr, endTime)
+          }
+
+          const cost = computeCostForShiftParams({
+            shiftDateYmd: targetYmd,
+            category,
+            startTime,
+            endTime,
+            isSleepover,
+            isPublicHoliday
+          })
+
+          inserts.push({
+            shift_date: targetYmd,
+            time_from: startDateTime,
+            time_to: endDateTime,
+            carer_id: s.carer_id,
+            line_item_code_id: targetLineItem.id,
+            cost
+          })
+        }
+      }
+
+      if (inserts.length === 0) {
+        setCopyDayError('Nothing to copy (missing categories or line items)')
+        return
+      }
+
+      const { error: insertError } = await supabase.from('shifts').insert(inserts)
+      if (insertError) throw insertError
+
+      setShowCopyDayDialog(false)
+      setCopyDaySelected([])
+      setCopyDayError(null)
+
+      // Refresh day + range data
+      await fetchData()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to copy shifts'
+      setCopyDayError(msg)
+    } finally {
+      setCopyDayIsWorking(false)
+    }
   }
 
   // Compute breakdown of overlapping line items and total cost
@@ -462,22 +1052,45 @@ export default function CalendarClient() {
     // if selection crosses midnight (end <= start) treat end as next day
     if (selEnd <= selStart) selEnd += 24 * 60
 
-    // Filter line items by category AND day type
-    const matchingLineItems = lineItemCodes.filter(li => {
+    // Filter line items by category AND day type, then by shift type
+    const baseMatchingLineItems = lineItemCodes.filter(li => {
       if (li.category !== newShift.category) return false
-      
-      // Check if line item matches the day type
-      // If weekday fields are null (before DB migration), treat as weekday items
-      switch (dayType) {
-        case 'weekday':
-          return li.weekday === true || (li.weekday == null && li.saturday !== true && li.sunday !== true)
-        case 'saturday':
-          return li.saturday === true
-        case 'sunday':
-          return li.sunday === true
-        default:
-          return false
+      return lineItemMatchesDayType(li, dayType)
+    })
+
+    // If shift is explicitly a sleepover, charge a flat sleepover rate (no time windows)
+    if (newShift.is_sleepover) {
+      const sleepoverItem = baseMatchingLineItems
+        .filter(li => li.sleepover === true)
+        .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
+
+      if (!sleepoverItem) {
+        return { rows, total: 0 }
       }
+
+      const rate = (sleepoverItem.billed_rate as unknown as number) || 0
+      const total = Math.round(rate * 100) / 100
+
+      rows.push({
+        code: sleepoverItem.code || String(sleepoverItem.id || ''),
+        frameFrom: newShift.start_time,
+        frameTo: newShift.end_time,
+        hours: 0,
+        rate,
+        total,
+        isSleepover: true
+      })
+
+      return { rows, total }
+    }
+
+    const matchingLineItems = baseMatchingLineItems.filter(li => {
+      // Public holiday shift uses only PH line items (excluding sleepover)
+      if (newShift.is_public_holiday) {
+        return li.public_holiday === true && li.sleepover !== true
+      }
+      // Standard shift excludes PH and sleepover line items
+      return li.public_holiday !== true && li.sleepover !== true
     })
 
     for (const li of matchingLineItems) {
@@ -498,10 +1111,7 @@ export default function CalendarClient() {
       const hours = Math.round((overlapMinutes / 60) * 100) / 100
       const rate = (li.billed_rate as unknown as number) || 0
       
-      // Special handling for sleepover line items - flat rate regardless of hours
-      const total = li.sleepover 
-        ? Math.round(rate * 100) / 100  // Flat rate for sleepover
-        : Math.round(hours * rate * 100) / 100  // Hourly rate for others
+      const total = Math.round(hours * rate * 100) / 100
 
       rows.push({
         code: li.code || String(li.id || ''),
@@ -512,7 +1122,7 @@ export default function CalendarClient() {
         hours,
         rate,
         total,
-        isSleepover: !!li.sleepover
+        isSleepover: false
       })
     }
 
@@ -558,10 +1168,33 @@ export default function CalendarClient() {
       
       const totalCost = calculateCost()
       
-      // Find the line item code ID based on the selected category
-      const lineItem = lineItemCodes.find(li => li.category === newShift.category)
+      // Find the correct line item code ID based on category + day type + shift type
+      const dayType = getDayType(currentDate)
+
+      const matchingForShift = lineItemCodes
+        .filter(li => li.category === newShift.category)
+        .filter(li => lineItemMatchesDayType(li, dayType))
+
+      const lineItem = (() => {
+        if (newShift.is_sleepover) {
+          return matchingForShift
+            .filter(li => li.sleepover === true)
+            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
+        }
+        if (newShift.is_public_holiday) {
+          return matchingForShift
+            .filter(li => li.public_holiday === true && li.sleepover !== true)
+            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
+        }
+        return matchingForShift
+          .filter(li => li.public_holiday !== true && li.sleepover !== true)
+          .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
+      })()
+
       if (!lineItem) {
-        setError('Selected category not found')
+        if (newShift.is_sleepover) setError('No sleepover line item found for the selected category/day')
+        else if (newShift.is_public_holiday) setError('No public holiday line item found for the selected category/day')
+        else setError('Selected category not found')
         return
       }
       
@@ -572,8 +1205,8 @@ export default function CalendarClient() {
       })
       
       // Prepare the shift data with proper TIMESTAMPTZ format
-      const startDateTime = `${newShift.shift_date}T${newShift.start_time}:00`
-      let endDateTime = `${newShift.shift_date}T${newShift.end_time}:00`
+      const startDateTime = buildUtcIsoFromLocal(newShift.shift_date, newShift.start_time)
+      let endDateTime = buildUtcIsoFromLocal(newShift.shift_date, newShift.end_time)
       
       // Handle overnight shifts: if end time is earlier than start time, add one day
       const [startHour, startMin] = newShift.start_time.split(':').map(Number)
@@ -583,10 +1216,8 @@ export default function CalendarClient() {
       
       if (endMinutes <= startMinutes) {
         // This is an overnight shift, add one day to the end time
-        const nextDay = new Date(newShift.shift_date)
-        nextDay.setDate(nextDay.getDate() + 1)
-        const nextDayStr = nextDay.toISOString().split('T')[0]
-        endDateTime = `${nextDayStr}T${newShift.end_time}:00`
+        const nextDayStr = addDaysToYmd(newShift.shift_date, 1)
+        endDateTime = buildUtcIsoFromLocal(nextDayStr, newShift.end_time)
       }
       
       const shiftData = {
@@ -641,13 +1272,21 @@ export default function CalendarClient() {
       resetDrag()
       
       // Refresh shifts data to show the new shift
-      const [refreshShiftsRes, refreshClientsRes] = await Promise.all([
+      const dayYmd = toYmdLocal(currentDate)
+      const rangeFrom = dateFrom || dayYmd
+      const rangeTo = dateTo || dayYmd
+
+      const [refreshShiftsRes, refreshClientsRes, refreshRangeShiftsRes] = await Promise.all([
         supabase.from('shifts').select(`
           *, 
-          carers(id, first_name, last_name, email), 
+          carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
-        `).eq('shift_date', currentDate.toISOString().split('T')[0]).order('time_from'),
-        supabase.from('clients').select('*')
+        `).eq('shift_date', toYmdLocal(currentDate)).order('time_from'),
+        supabase.from('clients').select('*'),
+        supabase.from('shifts').select(`
+          *,
+          carers(id, first_name, last_name, email, color)
+        `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
       ])
       
       if (refreshShiftsRes.error) {
@@ -664,6 +1303,13 @@ export default function CalendarClient() {
         console.log('Shifts refreshed:', refreshedShiftsWithClients?.length)
         console.log('📊 Refreshed shifts data:', refreshedShiftsWithClients)
         console.log('📊 Sample refreshed shift:', refreshedShiftsWithClients?.[0])
+      }
+
+      if (!refreshRangeShiftsRes.error) {
+        setRangeShifts(refreshRangeShiftsRes.data || [])
+        const { carerTotals, overlapSummary } = computeSidebarAggregates(refreshRangeShiftsRes.data || [])
+        setCarerTotals(carerTotals)
+        setOverlapSummary(carerTotals.length === 0 ? null : overlapSummary)
       }
       
       setError(null) // Clear any previous errors
@@ -695,6 +1341,9 @@ export default function CalendarClient() {
       setShowShiftDialog(false)
       resetDrag()
       setError(null)
+
+      // Refresh range totals/sidebar
+      fetchData()
     } catch (err) {
       console.error('Error deleting shift:', err)
       setError('Failed to delete shift')
@@ -711,7 +1360,9 @@ export default function CalendarClient() {
       carer_id: null,
       client_id: null,
       category: null,
-      line_item_code_id: null
+      line_item_code_id: null,
+      is_sleepover: false,
+      is_public_holiday: false
     })
     setEditingShift(null)
   }
@@ -756,22 +1407,20 @@ export default function CalendarClient() {
       // Get the shift's date
       const shift = shifts.find(s => s.id === shiftId)
       if (!shift) return
-      
-      const shiftDate = new Date(shift.shift_date).toISOString().split('T')[0]
+
+      const shiftDate = shift.shift_date
       
       // Handle overnight shifts
       const startMinutes = timeStringToMinutes(newStartTime)
       const endMinutes = timeStringToMinutes(newEndTime)
       
-      let startDateTime = `${shiftDate}T${newStartTime}:00`
-      let endDateTime = `${shiftDate}T${newEndTime}:00`
+      let startDateTime = buildUtcIsoFromLocal(shiftDate, newStartTime)
+      let endDateTime = buildUtcIsoFromLocal(shiftDate, newEndTime)
       
       if (endMinutes <= startMinutes) {
         // Overnight shift - add one day to end time
-        const nextDay = new Date(shiftDate)
-        nextDay.setDate(nextDay.getDate() + 1)
-        const nextDayStr = nextDay.toISOString().split('T')[0]
-        endDateTime = `${nextDayStr}T${newEndTime}:00`
+        const nextDayStr = addDaysToYmd(shiftDate, 1)
+        endDateTime = buildUtcIsoFromLocal(nextDayStr, newEndTime)
       }
       
       const { error } = await supabase
@@ -889,7 +1538,9 @@ export default function CalendarClient() {
       carer_id: shift.carer_id,
       client_id: clientId,
       category: selectedCategory,
-      line_item_code_id: selectedLineItemId
+      line_item_code_id: selectedLineItemId,
+      is_sleepover: !!lineItemCodes.find(li => li.id === String(selectedLineItemId))?.sleepover,
+      is_public_holiday: !!lineItemCodes.find(li => li.id === String(selectedLineItemId))?.public_holiday
     }
     
     console.log('📝 Setting newShift to:', newShiftData)
@@ -941,17 +1592,195 @@ export default function CalendarClient() {
     <div className="calendar-container">
       <div className="cal-header">
         <h1>Calendar - Day View</h1>
+
+        <div className="cal-range-controls">
+          <label className="cal-range-field">
+            <span className="cal-range-label">Date from</span>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo ? addDaysToYmd(dateTo, -1) : undefined}
+              onChange={(e) => {
+                const nextFrom = normalizeDateInput(e.target.value)
+                setDateRangeError(null)
+                setDateFrom(nextFrom)
+
+                try {
+                  if (nextFrom) localStorage.setItem('calendar.dateFrom', nextFrom)
+                  else localStorage.removeItem('calendar.dateFrom')
+                } catch {
+                  // ignore
+                }
+
+                if (dateTo && nextFrom && dateTo <= nextFrom) {
+                  setDateTo('')
+                  try {
+                    localStorage.removeItem('calendar.dateTo')
+                  } catch {
+                    // ignore
+                  }
+                }
+
+                if (nextFrom && toYmdLocal(currentDate) < nextFrom) {
+                  setCurrentDate(parseYmdToLocalDate(nextFrom))
+                }
+              }}
+            />
+          </label>
+
+          <label className="cal-range-field">
+            <span className="cal-range-label">Date to</span>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom ? addDaysToYmd(dateFrom, 1) : undefined}
+              onChange={(e) => {
+                const nextTo = normalizeDateInput(e.target.value)
+                if (dateFrom && nextTo && nextTo <= dateFrom) {
+                  setDateRangeError('Date to must be after Date from')
+                  return
+                }
+
+                setDateRangeError(null)
+                setDateTo(nextTo)
+
+                try {
+                  if (nextTo) localStorage.setItem('calendar.dateTo', nextTo)
+                  else localStorage.removeItem('calendar.dateTo')
+                } catch {
+                  // ignore
+                }
+
+                if (nextTo && toYmdLocal(currentDate) > nextTo) {
+                  setCurrentDate(parseYmdToLocalDate(nextTo))
+                }
+              }}
+            />
+          </label>
+        </div>
+
+        {dateRangeError && <div className="cal-range-error">{dateRangeError}</div>}
+
         <div className="cal-date-nav">
-          <button onClick={() => setCurrentDate(new Date(currentDate.getTime() - 24 * 60 * 60 * 1000))}>
+          <button
+            disabled={!!dateFrom && toYmdLocal(new Date(currentDate.getTime() - 24 * 60 * 60 * 1000)) < dateFrom}
+            onClick={() => {
+              const prev = new Date(currentDate.getTime() - 24 * 60 * 60 * 1000)
+              if (dateFrom && toYmdLocal(prev) < dateFrom) return
+              setCurrentDate(prev)
+            }}
+          >
             ← Previous Day
           </button>
           <span className="cal-current-date">{formatDate(currentDate)}</span>
-          <button onClick={() => setCurrentDate(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000))}>
+          <button
+            disabled={!!dateTo && toYmdLocal(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)) > dateTo}
+            onClick={() => {
+              const next = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)
+              if (dateTo && toYmdLocal(next) > dateTo) return
+              setCurrentDate(next)
+            }}
+          >
             Next Day →
           </button>
         </div>
         <button onClick={() => setCurrentDate(new Date())}>Today</button>
+        <button
+          onClick={() => {
+            setCopyDayError(null)
+            if (!dateFrom || !dateTo) {
+              setCopyDayError('Set Date from and Date to first')
+              setShowCopyDayDialog(true)
+              return
+            }
+
+            const srcYmd = toYmdLocal(currentDate)
+            const days = listDaysInclusive(dateFrom, dateTo)
+              .filter(d => d !== srcYmd)
+
+            setCopyDaySelected([])
+            setShowCopyDayDialog(true)
+
+            // Precompute availability; days are rendered from range anyway.
+            void days
+          }}
+          disabled={!!dateRangeError}
+        >
+          Copy day
+        </button>
       </div>
+
+      {showCopyDayDialog && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-copy-dialog">
+            <h3>Copy day</h3>
+            <div style={{ marginBottom: 8, color: '#374151', fontSize: 14 }}>
+              Copy shifts from <strong>{formatDate(currentDate)}</strong> to selected days.
+            </div>
+
+            {(!dateFrom || !dateTo) ? (
+              <div style={{ color: '#dc2626', marginTop: 8 }}>
+                Set Date from and Date to first.
+              </div>
+            ) : (
+              <div className="cal-copy-days">
+                {listDaysInclusive(dateFrom, dateTo)
+                  .filter(d => d !== toYmdLocal(currentDate))
+                  .map((ymd) => {
+                    const checked = copyDaySelected.includes(ymd)
+                    const label = parseYmdToLocalDate(ymd).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                    return (
+                      <label key={ymd} className="cal-copy-day">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...copyDaySelected, ymd]
+                              : copyDaySelected.filter(x => x !== ymd)
+                            setCopyDaySelected(next)
+                            setCopyDayError(null)
+                          }}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+            )}
+
+            {copyDayError && (
+              <div style={{ color: '#dc2626', marginTop: 10, fontSize: 13 }}>
+                {copyDayError}
+              </div>
+            )}
+
+            <div className="cal-dialog-buttons" style={{ marginTop: 16 }}>
+              <button
+                onClick={() => {
+                  setShowCopyDayDialog(false)
+                  setCopyDaySelected([])
+                  setCopyDayError(null)
+                }}
+                disabled={copyDayIsWorking}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCopyDay}
+                disabled={copyDayIsWorking || !dateFrom || !dateTo || copyDaySelected.length === 0}
+              >
+                {copyDayIsWorking ? 'Copying…' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="cal-error">
@@ -997,6 +1826,11 @@ export default function CalendarClient() {
             const startY = getYFromTime(shift.time_from)
             const endY = getYFromTime(shift.time_to)
             const height = Math.max(endY - startY, QUARTER_HOUR_HEIGHT)
+
+            const layout = dayLayout.get(shift.id) || { col: 0, colCount: 1 }
+            const pct = 100 / Math.max(1, layout.colCount)
+            const leftPct = layout.col * pct
+            const rightPct = (layout.colCount - layout.col - 1) * pct
             
             // Get carer color: use assigned color, or fallback to consistent color based on carer ID
             const carerColor = (shift.carers as any)?.color || 
@@ -1018,8 +1852,8 @@ export default function CalendarClient() {
                 style={{
                   position: 'absolute',
                   top: startY,
-                  left: 8,
-                  right: 8,
+                  left: `calc(${leftPct}% + 8px)`,
+                  right: `calc(${rightPct}% + 8px)`,
                   height: height,
                   background: hexToRgba(carerColor, 0.7),
                   border: `2px solid ${carerColor}`,
@@ -1195,6 +2029,43 @@ export default function CalendarClient() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="cal-form-group">
+              <label>Shift Type:</label>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={newShift.is_sleepover}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setNewShift(prev => ({
+                        ...prev,
+                        is_sleepover: checked,
+                        is_public_holiday: checked ? false : prev.is_public_holiday
+                      }))
+                    }}
+                  />
+                  Sleepover
+                </label>
+
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={newShift.is_public_holiday}
+                    onChange={(e) => {
+                      const checked = e.target.checked
+                      setNewShift(prev => ({
+                        ...prev,
+                        is_public_holiday: checked,
+                        is_sleepover: checked ? false : prev.is_sleepover
+                      }))
+                    }}
+                  />
+                  Public holiday
+                </label>
+              </div>
             </div>
 
             {/* Cost breakdown by line item code */}
@@ -1385,6 +2256,58 @@ export default function CalendarClient() {
           overflow-y: auto;
         }
 
+        .cal-copy-dialog {
+          background: white;
+          padding: 24px;
+          border-radius: 12px;
+          width: 420px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          max-height: 80vh;
+          overflow-y: auto;
+          color: #111827;
+        }
+
+        .cal-copy-dialog h3 {
+          margin: 0 0 8px 0;
+          color: #111827;
+          font-weight: 800;
+        }
+
+        .cal-copy-days {
+          margin-top: 12px;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          padding: 8px;
+          max-height: 320px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          color: #111827;
+          opacity: 1;
+        }
+
+        .cal-copy-day {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          color: #111827;
+          font-weight: 600;
+          opacity: 1;
+        }
+
+        .cal-copy-day span {
+          color: #111827;
+          opacity: 1;
+        }
+
+        .cal-copy-day:hover {
+          background: #f9fafb;
+        }
+
         .cal-form-group {
           margin-bottom: 20px;
         }
@@ -1499,10 +2422,14 @@ export default function CalendarClient() {
         }
 
         .cal-breakdown-header {
-          font-weight: 600;
-          color: #374151 !important;
+          font-weight: 700;
+          color: #111827 !important;
           border-bottom: 1px solid #f3f4f6;
           margin-bottom: 6px;
+        }
+
+        .cal-breakdown-header div {
+          color: #111827 !important;
         }
 
         .cal-breakdown-row {

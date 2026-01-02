@@ -210,14 +210,11 @@ export default function LineItemCodesClient() {
     };
   }, [supabase]);
 
-  // Auto-set times based on special flag
+  // For sleepover line items, times are not applicable
   useEffect(() => {
-    if (specialFlag === 'Public Holiday') {
-      setTimeFrom('00:00');
-      setTimeTo('00:00');
-    } else if (specialFlag === 'Sleepover') {
-      setTimeFrom('01:00');
-      setTimeTo('09:00');
+    if (specialFlag === 'Sleepover') {
+      setTimeFrom('');
+      setTimeTo('');
     }
   }, [specialFlag]);
 
@@ -294,16 +291,12 @@ export default function LineItemCodesClient() {
   const handleAdd = async () => {
     if (isAddDisabled) return;
 
-    // Auto-populate times based on flag
+    // Sleepover line items do not use time windows
     let finalTimeFrom = timeFrom;
     let finalTimeTo = timeTo;
-    
-    if (specialFlag === 'Public Holiday') {
-      finalTimeFrom = '00:00';
-      finalTimeTo = '00:00';
-    } else if (specialFlag === 'Sleepover') {
-      finalTimeFrom = '01:00';
-      finalTimeTo = '09:00';
+    if (specialFlag === 'Sleepover') {
+      finalTimeFrom = '';
+      finalTimeTo = '';
     }
 
     const newItem = {
@@ -361,16 +354,12 @@ export default function LineItemCodesClient() {
   const handleUpdate = async () => {
     if (isAddDisabled || !editingId) return;
 
-    // Auto-populate times based on flag
+    // Sleepover line items do not use time windows
     let finalTimeFrom = timeFrom;
     let finalTimeTo = timeTo;
-    
-    if (specialFlag === 'Public Holiday') {
-      finalTimeFrom = '00:00';
-      finalTimeTo = '00:00';
-    } else if (specialFlag === 'Sleepover') {
-      finalTimeFrom = '01:00';
-      finalTimeTo = '09:00';
+    if (specialFlag === 'Sleepover') {
+      finalTimeFrom = '';
+      finalTimeTo = '';
     }
 
     const updatedItem = {
@@ -577,8 +566,8 @@ export default function LineItemCodesClient() {
             </div>
           </div>
 
-          {/* Conditionally hide time fields when flag is set */}
-          {!specialFlag && (
+          {/* Hide time fields only for Sleepover */}
+          {specialFlag !== 'Sleepover' && (
             <>
               <label htmlFor="timeFrom" className="label">
                 Time from
