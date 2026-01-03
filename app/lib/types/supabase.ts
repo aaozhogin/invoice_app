@@ -143,6 +143,7 @@ export type Database = {
           line_item_code_id: number;
           cost: number;
           shift_date: string;
+          category?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -154,6 +155,7 @@ export type Database = {
           line_item_code_id: number;
           cost: number;
           shift_date: string;
+          category?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -165,6 +167,27 @@ export type Database = {
           line_item_code_id?: number;
           cost?: number;
           shift_date?: string;
+          category?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      };
+      line_item_categories: {
+        Row: {
+          id: number;
+          name: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: number;
+          name?: string;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -180,3 +203,4 @@ export type Database = {
 export type LineItem = Database['public']['Tables']['line_items']['Row'];
 export type Carer = Database['public']['Tables']['carers']['Row'];
 export type Shift = Database['public']['Tables']['shifts']['Row'];
+export type LineItemCategory = Database['public']['Tables']['line_item_categories']['Row'];

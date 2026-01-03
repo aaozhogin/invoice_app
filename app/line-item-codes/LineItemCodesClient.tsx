@@ -5,6 +5,7 @@ import getSupabaseClient from '../lib/supabaseClient';
 import { Database } from '../lib/types/supabase';
 
 type LineItem = Database['public']['Tables']['line_items']['Row'];
+type LineItemCategory = Database['public']['Tables']['line_item_categories']['Row'];
 
 function TimePicker({
   id,
@@ -96,7 +97,7 @@ function TimePicker({
                 <button
                   key={h24}
                   type="button"
-                  className={`tp-item ${hr24 === h24 ? 'selected' : ''}`}
+                  className={`tp-item ${displayHr === h24 ? 'selected' : ''}`}
                   onClick={() => handleHourSelect(h24)}
                 >
                   {String(h24).padStart(2, '0')}
@@ -169,8 +170,11 @@ export default function LineItemCodesClient() {
   const supabase = getSupabaseClient();
 
   const [items, setItems] = useState<LineItem[]>([]);
+  const [categories, setCategories] = useState<LineItemCategory[]>([]);
   const [formVisible, setFormVisible] = useState(false);
+  const [categoryFormVisible, setCategoryFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
 
   const [form, setForm] = useState({
@@ -181,15 +185,21 @@ export default function LineItemCodesClient() {
     billedRate: '',
   });
 
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+  });
+
   const [activeTimeFrames, setActiveTimeFrames] = useState<string[]>([]);
   const activeOptions = ['Night rate', 'Day rate', 'Evening rate'];
 
   const [weekdayType, setWeekdayType] = useState<'weekday' | 'saturday' | 'sunday'>('weekday');
-  const [specialFlag, setSpecialFlag] = useState<'Sleepover' | 'Public Holiday' | null>(null);
+  const [isSleepover, setIsSleepover] = useState(false);
+  const [isPublicHoliday, setIsPublicHoliday] = useState(false);
 
   const [timeFrom, setTimeFrom] = useState<string>('');
   const [timeTo, setTimeTo] = useState<string>('');
 
+  // Fetch line items
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -210,13 +220,34 @@ export default function LineItemCodesClient() {
     };
   }, [supabase]);
 
-  // For sleepover line items, times are not applicable
+  // Fetch categories
   useEffect(() => {
-    if (specialFlag === 'Sleepover') {
+    let mounted = true;
+    (async () => {
+      const res = (await supabase.from('line_item_categories').select('*').order('name', { ascending: true })) as {
+        data: LineItemCategory[] | null;
+        error: any;
+      };
+      if (!mounted) return;
+      const { data, error } = res;
+      if (error) {
+        console.error('Fetch categories error:', error);
+      } else {
+        setCategories(data ?? []);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
+
+  // For sleepover, public holiday, or weekend line items, times are not applicable
+  useEffect(() => {
+    if (isSleepover || isPublicHoliday || weekdayType === 'saturday' || weekdayType === 'sunday') {
       setTimeFrom('');
       setTimeTo('');
     }
-  }, [specialFlag]);
+  }, [isSleepover, isPublicHoliday, weekdayType]);
 
   // validation for code: only digits and underscores
   const codePattern = /^[0-9_]+$/;
@@ -247,7 +278,10 @@ export default function LineItemCodesClient() {
   const activeError = formVisible && activeTimeFrames.length === 0 ? 'Select at least one time frame' : '';
 
   const timeError = (() => {
-    if (!formVisible || !timeFrom || !timeTo) return '';
+    if (!formVisible) return '';
+    // Skip validation when time inputs are hidden (Sleepover, Public Holiday, or weekend)
+    if (isSleepover || isPublicHoliday || weekdayType === 'saturday' || weekdayType === 'sunday') return '';
+    if (!timeFrom || !timeTo) return '';
     
     // Normalize time strings (remove seconds if present)
     const normalizeTime = (time: string) => time.split(':').slice(0, 2).join(':');
@@ -283,7 +317,8 @@ export default function LineItemCodesClient() {
   const resetForm = () => {
     setForm({ code: '', category: '', description: '', maxRate: '', billedRate: '' });
     setWeekdayType('weekday');
-    setSpecialFlag(null);
+    setIsSleepover(false);
+    setIsPublicHoliday(false);
     setTimeFrom('');
     setTimeTo('');
   };
@@ -291,23 +326,26 @@ export default function LineItemCodesClient() {
   const handleAdd = async () => {
     if (isAddDisabled) return;
 
-    // Sleepover line items do not use time windows
+    // Sleepover, Public Holiday, and weekend line items do not use time windows
     let finalTimeFrom = timeFrom;
     let finalTimeTo = timeTo;
-    if (specialFlag === 'Sleepover') {
+    if (isSleepover || isPublicHoliday || weekdayType === 'saturday' || weekdayType === 'sunday') {
       finalTimeFrom = '';
       finalTimeTo = '';
     }
+
+    const sleepoverFlag = isSleepover;
+    const publicHolidayFlag = isPublicHoliday;
 
     const newItem = {
       code: form.code,
       category: form.category,
       description: form.description || null,
-      sleepover: specialFlag === 'Sleepover' ? true : false,
-      public_holiday: specialFlag === 'Public Holiday' ? true : false,
-      weekday: weekdayType === 'weekday',
-      saturday: weekdayType === 'saturday',
-      sunday: weekdayType === 'sunday',
+      sleepover: sleepoverFlag,
+      public_holiday: publicHolidayFlag,
+      weekday: !publicHolidayFlag && weekdayType === 'weekday',
+      saturday: !publicHolidayFlag && weekdayType === 'saturday',
+      sunday: !publicHolidayFlag && weekdayType === 'sunday',
       time_from: finalTimeFrom || null,
       time_to: finalTimeTo || null,
       max_rate: max as number,
@@ -345,7 +383,8 @@ export default function LineItemCodesClient() {
       billedRate: item.billed_rate?.toString() || '',
     });
     setWeekdayType(item.saturday ? 'saturday' : item.sunday ? 'sunday' : 'weekday');
-    setSpecialFlag(item.sleepover ? 'Sleepover' : item.public_holiday ? 'Public Holiday' : null);
+    setIsSleepover(!!item.sleepover);
+    setIsPublicHoliday(!!item.public_holiday);
     setTimeFrom(item.time_from || '');
     setTimeTo(item.time_to || '');
     setFormVisible(true);
@@ -354,23 +393,26 @@ export default function LineItemCodesClient() {
   const handleUpdate = async () => {
     if (isAddDisabled || !editingId) return;
 
-    // Sleepover line items do not use time windows
+    // Sleepover, Public Holiday, and weekend line items do not use time windows
     let finalTimeFrom = timeFrom;
     let finalTimeTo = timeTo;
-    if (specialFlag === 'Sleepover') {
+    if (isSleepover || isPublicHoliday || weekdayType === 'saturday' || weekdayType === 'sunday') {
       finalTimeFrom = '';
       finalTimeTo = '';
     }
+
+    const sleepoverFlag = isSleepover;
+    const publicHolidayFlag = isPublicHoliday;
 
     const updatedItem = {
       code: form.code,
       category: form.category,
       description: form.description || null,
-      sleepover: specialFlag === 'Sleepover',
-      public_holiday: specialFlag === 'Public Holiday',
-      weekday: weekdayType === 'weekday',
-      saturday: weekdayType === 'saturday',
-      sunday: weekdayType === 'sunday',
+      sleepover: sleepoverFlag,
+      public_holiday: publicHolidayFlag,
+      weekday: !publicHolidayFlag && weekdayType === 'weekday',
+      saturday: !publicHolidayFlag && weekdayType === 'saturday',
+      sunday: !publicHolidayFlag && weekdayType === 'sunday',
       time_from: finalTimeFrom || null,
       time_to: finalTimeTo || null,
       max_rate: max as number,
@@ -414,6 +456,92 @@ export default function LineItemCodesClient() {
     setItems((prev) => prev.filter((it) => it.id !== id));
   };
 
+  // Category handlers
+  const handleCategorySave = async () => {
+    const trimmedName = categoryForm.name.trim();
+    if (!trimmedName) return;
+    
+    // Validate alphanumeric (allow spaces)
+    const alphanumericPattern = /^[a-zA-Z0-9\s]+$/;
+    if (!alphanumericPattern.test(trimmedName)) {
+      alert('Category name must contain only letters, numbers, and spaces');
+      return;
+    }
+
+    // Check for reserved name
+    if (trimmedName.toUpperCase() === 'HIREUP') {
+      alert('This category name is reserved, please use another one');
+      return;
+    }
+
+    // Check for duplicate name (excluding current category when editing)
+    const isDuplicate = categories.some(
+      cat => cat.name.toLowerCase() === trimmedName.toLowerCase() && cat.id !== editingCategoryId
+    );
+    if (isDuplicate) {
+      alert('A category with this name already exists, please use another one');
+      return;
+    }
+
+    if (editingCategoryId) {
+      // Update existing category
+      const { data, error } = await supabase
+        .from('line_item_categories')
+        .update({ name: trimmedName })
+        .eq('id', editingCategoryId)
+        .select();
+
+      if (error) {
+        console.error('Update category error:', error);
+        alert(`Update failed: ${error.message}`);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setCategories((prev) =>
+          prev.map((cat) => (cat.id === editingCategoryId ? data[0] : cat)).sort((a, b) => a.name.localeCompare(b.name))
+        );
+      }
+    } else {
+      // Insert new category
+      const { data, error } = await supabase
+        .from('line_item_categories')
+        .insert([{ name: trimmedName }])
+        .select();
+
+      if (error) {
+        console.error('Insert category error:', error);
+        alert(`Insert failed: ${error.message}`);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setCategories((prev) => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    }
+
+    setCategoryFormVisible(false);
+    setEditingCategoryId(null);
+    setCategoryForm({ name: '' });
+  };
+
+  const handleCategoryEdit = (category: LineItemCategory) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({ name: category.name });
+    setCategoryFormVisible(true);
+  };
+
+  const handleCategoryDelete = async (id: number) => {
+    if (!confirm('Delete this category? Note: Line items using this category will not be affected.')) return;
+    const { error } = await supabase.from('line_item_categories').delete().eq('id', id);
+    if (error) {
+      console.error('Delete category error:', error);
+      alert('Delete failed');
+      return;
+    }
+    setCategories((prev) => prev.filter((cat) => cat.id !== id));
+  };
+
   const handleDragStart = (id: number) => {
     setDraggedId(id);
   };
@@ -442,7 +570,96 @@ export default function LineItemCodesClient() {
 
   return (
     <div style={{ padding: 16 }}>
-      <h1>Line Item Codes</h1>
+      {/* Categories Section */}
+      <h1>Line Item Codes Categories</h1>
+      
+      <button onClick={() => { setCategoryFormVisible(true); setEditingCategoryId(null); setCategoryForm({ name: '' }); }}>
+        Add line item code category
+      </button>
+
+      {categoryFormVisible && (
+        <div className="form-table" style={{ marginTop: 12, marginBottom: 24 }}>
+          <label htmlFor="categoryName" className="label">
+            Category Name
+          </label>
+          <div className="control">
+            <input
+              id="categoryName"
+              placeholder="e.g. CORE"
+              value={categoryForm.name}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                setCategoryForm({ name: e.target.value })
+              }
+            />
+          </div>
+
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, marginTop: 12 }}>
+            <button type="button" onClick={handleCategorySave}>
+              {editingCategoryId ? 'Update' : 'Add'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryFormVisible(false);
+                setEditingCategoryId(null);
+                setCategoryForm({ name: '' });
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {categories.length > 0 && (
+        <div className="categories-table" style={{ marginTop: 16, marginBottom: 32 }}>
+          <div className="categories-header">
+            <div>Seq</div>
+            <div>Category Name</div>
+            <div>Actions</div>
+          </div>
+          {categories
+            .slice()
+            .sort((a, b) => {
+              // HIREUP always at the bottom
+              if (a.name === 'HIREUP') return 1;
+              if (b.name === 'HIREUP') return -1;
+              return a.name.localeCompare(b.name);
+            })
+            .map((category, idx) => (
+            <div 
+              key={category.id} 
+              className={`categories-row ${category.name === 'HIREUP' ? 'readonly' : ''}`}
+            >
+              <div>{idx + 1}</div>
+              <div>{category.name}</div>
+              <div>
+                {category.name !== 'HIREUP' && (
+                  <>
+                    <button
+                      className="edit-btn"
+                      title="Edit"
+                      onClick={() => handleCategoryEdit(category)}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="trash"
+                      title="Delete"
+                      onClick={() => handleCategoryDelete(category.id)}
+                    >
+                      🗑️
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Line Items Section */}
+      <h1 style={{ marginTop: 32 }}>Line Item Codes</h1>
 
       <button onClick={() => setFormVisible(true)}>Add line item code</button>
 
@@ -474,11 +691,11 @@ export default function LineItemCodesClient() {
               }
             >
               <option value="">Select category</option>
-              <option value="CORE">CORE</option>
-              <option value="Home and Living">Home and Living</option>
-              <option value="Access Community Social and Rec Activities">
-                Access Community Social and Rec Activities
-              </option>
+              {categories.filter(cat => cat.name !== 'HIREUP').map((cat) => (
+                <option key={cat.id} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -497,41 +714,45 @@ export default function LineItemCodesClient() {
             />
           </div>
 
-          <label className="label">Weekday type</label>
-          <div className="control weekday-options">
-            <label className="weekday-option">
-              <input
-                type="radio"
-                name="weekdayType"
-                value="weekday"
-                checked={weekdayType === 'weekday'}
-                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
-              />
-              <span className="weekday-label">Weekday</span>
-            </label>
+          {!isPublicHoliday && (
+            <>
+              <label className="label">Weekday type</label>
+              <div className="control weekday-options">
+                <label className="weekday-option">
+                  <input
+                    type="radio"
+                    name="weekdayType"
+                    value="weekday"
+                    checked={weekdayType === 'weekday'}
+                    onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+                  />
+                  <span className="weekday-label">Weekday</span>
+                </label>
 
-            <label className="weekday-option">
-              <input
-                type="radio"
-                name="weekdayType"
-                value="saturday"
-                checked={weekdayType === 'saturday'}
-                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
-              />
-              <span className="weekday-label">Saturday</span>
-            </label>
+                <label className="weekday-option">
+                  <input
+                    type="radio"
+                    name="weekdayType"
+                    value="saturday"
+                    checked={weekdayType === 'saturday'}
+                    onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+                  />
+                  <span className="weekday-label">Saturday</span>
+                </label>
 
-            <label className="weekday-option">
-              <input
-                type="radio"
-                name="weekdayType"
-                value="sunday"
-                checked={weekdayType === 'sunday'}
-                onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
-              />
-              <span className="weekday-label">Sunday</span>
-            </label>
-          </div>
+                <label className="weekday-option">
+                  <input
+                    type="radio"
+                    name="weekdayType"
+                    value="sunday"
+                    checked={weekdayType === 'sunday'}
+                    onChange={(e) => setWeekdayType(e.target.value as 'weekday' | 'saturday' | 'sunday')}
+                  />
+                  <span className="weekday-label">Sunday</span>
+                </label>
+              </div>
+            </>
+          )}
 
           <label className="label">Special flag</label>
           <div className="control special-options">
@@ -539,10 +760,8 @@ export default function LineItemCodesClient() {
               <input
                 type="checkbox"
                 className="special-checkbox"
-                checked={specialFlag === 'Sleepover'}
-                onChange={() =>
-                  setSpecialFlag((s) => (s === 'Sleepover' ? null : 'Sleepover'))
-                }
+                checked={isSleepover}
+                onChange={() => setIsSleepover((prev) => !prev)}
               />
               <span className="special-label">Sleepover</span>
             </label>
@@ -551,23 +770,19 @@ export default function LineItemCodesClient() {
               <input
                 type="checkbox"
                 className="special-checkbox"
-                checked={specialFlag === 'Public Holiday'}
-                onChange={() =>
-                  setSpecialFlag((s) =>
-                    s === 'Public Holiday' ? null : 'Public Holiday'
-                  )
-                }
+                checked={isPublicHoliday}
+                onChange={() => setIsPublicHoliday((prev) => !prev)}
               />
               <span className="special-label">Public Holiday</span>
             </label>
 
             <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 6 }}>
-              (Only one or none allowed)
+              (You may choose one or both)
             </div>
           </div>
 
-          {/* Hide time fields only for Sleepover */}
-          {specialFlag !== 'Sleepover' && (
+          {/* Hide time fields for Sleepover, Public Holiday, and weekends */}
+          {!isSleepover && !isPublicHoliday && weekdayType === 'weekday' && (
             <>
               <label htmlFor="timeFrom" className="label">
                 Time from
@@ -720,6 +935,60 @@ export default function LineItemCodesClient() {
       )}
 
       <style jsx>{`
+        .categories-table {
+          display: grid;
+          gap: 1px;
+          background-color: var(--border);
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        
+        .categories-header,
+        .categories-row {
+          display: grid;
+          grid-template-columns: 60px 1fr 120px;
+          gap: 1px;
+          background-color: var(--surface);
+          color: var(--text);
+          font-size: 0.95rem;
+        }
+        
+        .categories-header {
+          font-weight: 600;
+          background-color: var(--surface-accent);
+          color: var(--text);
+        }
+        
+        .categories-header > div,
+        .categories-row > div {
+          padding: 8px 12px;
+          display: flex;
+          align-items: center;
+          background-color: inherit;
+          overflow-wrap: break-word;
+          word-break: break-word;
+          color: inherit;
+        }
+        
+        .categories-row:hover {
+          background-color: var(--surface-hover);
+        }
+        
+        .categories-row.readonly {
+          opacity: 0.5;
+          color: #999;
+        }
+        
+        .categories-row.readonly:hover {
+          background-color: var(--surface);
+          cursor: default;
+        }
+        
+        .categories-row > div:last-child {
+          justify-content: center;
+          align-self: center;
+        }
+        
         .line-items-table {
           display: grid;
           gap: 1px;
@@ -734,11 +1003,14 @@ export default function LineItemCodesClient() {
           grid-template-columns: 60px 160px 160px 1fr 100px 120px 120px 80px 80px 80px 100px 80px;
           gap: 1px;
           background-color: var(--surface);
+          color: var(--text);
+          font-size: 0.95rem;
         }
         
         .line-items-header {
           font-weight: 600;
           background-color: var(--surface-accent);
+          color: var(--text);
         }
         
         .line-items-header > div,
@@ -749,6 +1021,7 @@ export default function LineItemCodesClient() {
           background-color: inherit;
           overflow-wrap: break-word;
           word-break: break-word;
+          color: inherit;
         }
         
         .line-items-row {
