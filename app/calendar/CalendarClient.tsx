@@ -9,37 +9,29 @@ interface Shift {
   id: number
   time_from: string
   time_to: string
-        <div className="cal-actions">
-          <button
-            className="cal-actions-btn"
-            onClick={() => setShowActionsMenu((v) => !v)}
-            disabled={!!dateRangeError}
-          >
-            Actions ▾
-          </button>
-          {showActionsMenu && (
-            <div className="cal-actions-menu">
-              <button
-                className="cal-actions-item"
-                onClick={() => {
-                  setShowActionsMenu(false)
-                  handleCopyDayClick()
-                }}
-              >
-                Copy day
-              </button>
-              <button
-                className="cal-actions-item"
-                onClick={() => {
-                  setShowActionsMenu(false)
-                  handleSaveCalendarClick()
-                }}
-              >
-                Save calendar
-              </button>
-            </div>
-          )}
-        </div>
+  carer_id: number
+  client_id?: number
+  line_item_code_id: number
+  cost: number
+  shift_date: string
+  created_at?: string
+  updated_at?: string
+  // Relations
+  carers?: Carer
+  clients?: Client
+  line_items?: LineItemCode
+}
+
+interface Carer {
+  id: number
+  first_name: string
+  last_name: string
+  billed_rates: number
+  color?: string  // Optional since the column might not exist in database yet
+}
+
+interface LineItemCode {
+  id: string
   code?: string | null
   description: string | null
   category: string | null
@@ -94,6 +86,37 @@ function getInitialCurrentDate(): Date {
     const stored = localStorage.getItem('calendar.currentDate')
     if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) {
       const [year, month, day] = stored.split('-').map(Number)
+      return new Date(year, month - 1, day)
+    }
+  } catch {
+    // ignore
+  }
+  return new Date()
+}
+
+// Helper to initialize selectedClientId from localStorage
+function getInitialSelectedClientId(): number | null {
+  try {
+    const stored = localStorage.getItem('calendar.selectedClientId')
+    if (stored) return Number(stored)
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+export default function CalendarClient() {
+  const router = useRouter()
+  const [currentDate, setCurrentDate] = useState<Date>(getInitialCurrentDate)
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null)
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(getInitialSelectedClientId)
+  const [showCopyDayDialog, setShowCopyDayDialog] = useState(false)
+  const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
+  const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
+  const [copyDayError, setCopyDayError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [carers, setCarers] = useState<Carer[]>([])
   const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -2116,14 +2139,6 @@ function getInitialCurrentDate(): Date {
     return errorText
   }
 
-  const hours = Array.from({ length: 24 }, (_, i) => {
-    const hour = i
-    if (hour === 0) return '12 AM'
-    if (hour < 12) return `${hour} AM`
-    if (hour === 12) return '12 PM'
-    return `${hour - 12} PM`
-  })
-
   const handleCopyDayClick = () => {
     setCopyDayError(null)
     if (!dateFrom || !dateTo) {
@@ -2133,18 +2148,24 @@ function getInitialCurrentDate(): Date {
     }
 
     const srcYmd = toYmdLocal(currentDate)
-    const days = listDaysInclusive(dateFrom, dateTo)
+    void listDaysInclusive(dateFrom, dateTo)
       .filter(d => d !== srcYmd)
 
     setCopyDaySelected([])
     setShowCopyDayDialog(true)
-
-    void days
   }
 
   const handleSaveCalendarClick = () => {
     alert('There are no saved Calendars at the moment. Come back later.')
   }
+
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    const hour = i
+    if (hour === 0) return '12 AM'
+    if (hour < 12) return `${hour} AM`
+    if (hour === 12) return '12 PM'
+    return `${hour - 12} PM`
+  })
 
   return (
     <div className="calendar-container">
@@ -2333,29 +2354,37 @@ function getInitialCurrentDate(): Date {
           </button>
         </div>
         <button onClick={() => setCurrentDate(new Date())}>Today</button>
-        <button
-          onClick={() => {
-            setCopyDayError(null)
-            if (!dateFrom || !dateTo) {
-              setCopyDayError('Set Date from and Date to first')
-              setShowCopyDayDialog(true)
-              return
-            }
-
-            const srcYmd = toYmdLocal(currentDate)
-            const days = listDaysInclusive(dateFrom, dateTo)
-              .filter(d => d !== srcYmd)
-
-            setCopyDaySelected([])
-            setShowCopyDayDialog(true)
-
-            // Precompute availability; days are rendered from range anyway.
-            void days
-          }}
-          disabled={!!dateRangeError}
-        >
-          Copy day
-        </button>
+        <div className="cal-actions">
+          <button
+            className="cal-actions-btn"
+            onClick={() => setShowActionsMenu((v) => !v)}
+            disabled={!!dateRangeError}
+          >
+            Actions ▾
+          </button>
+          {showActionsMenu && (
+            <div className="cal-actions-menu">
+              <button
+                className="cal-actions-item"
+                onClick={() => {
+                  setShowActionsMenu(false)
+                  handleCopyDayClick()
+                }}
+              >
+                Copy day
+              </button>
+              <button
+                className="cal-actions-item"
+                onClick={() => {
+                  setShowActionsMenu(false)
+                  handleSaveCalendarClick()
+                }}
+              >
+                Save calendar
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {showCopyDayDialog && (
