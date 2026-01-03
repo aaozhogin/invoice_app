@@ -9,29 +9,37 @@ interface Shift {
   id: number
   time_from: string
   time_to: string
-  carer_id: number
-  client_id?: number
-  line_item_code_id: number
-  cost: number
-  shift_date: string
-  created_at?: string
-  updated_at?: string
-  // Relations
-  carers?: Carer
-  clients?: Client
-  line_items?: LineItemCode
-}
-
-interface Carer {
-  id: number
-  first_name: string
-  last_name: string
-  billed_rates: number
-  color?: string  // Optional since the column might not exist in database yet
-}
-
-interface LineItemCode {
-  id: string
+        <div className="cal-actions">
+          <button
+            className="cal-actions-btn"
+            onClick={() => setShowActionsMenu((v) => !v)}
+            disabled={!!dateRangeError}
+          >
+            Actions ▾
+          </button>
+          {showActionsMenu && (
+            <div className="cal-actions-menu">
+              <button
+                className="cal-actions-item"
+                onClick={() => {
+                  setShowActionsMenu(false)
+                  handleCopyDayClick()
+                }}
+              >
+                Copy day
+              </button>
+              <button
+                className="cal-actions-item"
+                onClick={() => {
+                  setShowActionsMenu(false)
+                  handleSaveCalendarClick()
+                }}
+              >
+                Save calendar
+              </button>
+            </div>
+          )}
+        </div>
   code?: string | null
   description: string | null
   category: string | null
@@ -121,6 +129,7 @@ export default function CalendarClient() {
   const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [categories, setCategories] = useState<string[]>([])
+  const [showActionsMenu, setShowActionsMenu] = useState(false)
   const [shifts, setShifts] = useState<Shift[]>([]) // Add shifts state
   const [rangeShifts, setRangeShifts] = useState<Shift[]>([])
   const [editingShift, setEditingShift] = useState<Shift | null>(null)
@@ -2146,6 +2155,28 @@ export default function CalendarClient() {
     return `${hour - 12} PM`
   })
 
+  const handleCopyDayClick = () => {
+    setCopyDayError(null)
+    if (!dateFrom || !dateTo) {
+      setCopyDayError('Set Date from and Date to first')
+      setShowCopyDayDialog(true)
+      return
+    }
+
+    const srcYmd = toYmdLocal(currentDate)
+    const days = listDaysInclusive(dateFrom, dateTo)
+      .filter(d => d !== srcYmd)
+
+    setCopyDaySelected([])
+    setShowCopyDayDialog(true)
+
+    void days
+  }
+
+  const handleSaveCalendarClick = () => {
+    alert('There are no saved Calendars at the moment. Come back later.')
+  }
+
   return (
     <div className="calendar-container">
       {/* Show loading spinner while data is being fetched */}
@@ -2985,6 +3016,44 @@ export default function CalendarClient() {
           display: flex;
           align-items: center;
           gap: 20px;
+        }
+
+        .cal-actions {
+          position: relative;
+          display: inline-block;
+        }
+
+        .cal-actions-btn {
+          position: relative;
+          padding-right: 28px;
+        }
+
+        .cal-actions-menu {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          background: #0f1724;
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 8px;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+          padding: 6px;
+          min-width: 160px;
+          z-index: 200;
+        }
+
+        .cal-actions-item {
+          width: 100%;
+          text-align: left;
+          background: transparent;
+          border: none;
+          color: #e6eef6;
+          padding: 8px 10px;
+          border-radius: 6px;
+          cursor: pointer;
+        }
+
+        .cal-actions-item:hover {
+          background: rgba(125,211,252,0.08);
         }
 
         .cal-current-date {

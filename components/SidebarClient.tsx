@@ -12,6 +12,9 @@ export default function SidebarClient() {
       <Link href="/calendar" className="nav-link">
         Calendar
       </Link>
+      <Link href="/saved-calendars" className="nav-link">
+        Saved Calendars
+      </Link>
       <Link href="/shifts" className="nav-link">
         Shifts
       </Link>
