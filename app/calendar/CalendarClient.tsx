@@ -94,37 +94,6 @@ function getInitialCurrentDate(): Date {
     const stored = localStorage.getItem('calendar.currentDate')
     if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) {
       const [year, month, day] = stored.split('-').map(Number)
-      return new Date(year, month - 1, day)
-    }
-  } catch {
-    // ignore
-  }
-  return new Date()
-}
-
-// Helper to initialize selectedClientId from localStorage
-function getInitialSelectedClientId(): number | null {
-  try {
-    const stored = localStorage.getItem('calendar.selectedClientId')
-    if (stored) return Number(stored)
-  } catch {
-    // ignore
-  }
-  return null
-}
-
-export default function CalendarClient() {
-  const router = useRouter()
-  const [currentDate, setCurrentDate] = useState<Date>(getInitialCurrentDate)
-  const [dateFrom, setDateFrom] = useState<string>('')
-  const [dateTo, setDateTo] = useState<string>('')
-  const [dateRangeError, setDateRangeError] = useState<string | null>(null)
-  const [selectedClientId, setSelectedClientId] = useState<number | null>(getInitialSelectedClientId)
-  const [showCopyDayDialog, setShowCopyDayDialog] = useState(false)
-  const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
-  const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
-  const [copyDayError, setCopyDayError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [carers, setCarers] = useState<Carer[]>([])
   const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
   const [clients, setClients] = useState<Client[]>([])
