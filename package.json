@@ -10,11 +10,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.80.0",
-    "exceljs": "^4.4.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
-    "next": "latest",
+    "next": "^16.1.1",
     "react": "latest",
     "react-dom": "latest"
   },
