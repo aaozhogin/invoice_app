@@ -3753,10 +3753,10 @@ export default function CalendarClient() {
         <div className="cal-dialog-overlay">
           <div className="cal-dialog" style={{ maxWidth: '400px' }}>
             <h3>Delete all shifts?</h3>
-            <div style={{ marginBottom: 16, color: '#374151', fontSize: 14 }}>
+            <div style={{ marginBottom: 20, color: '#374151', fontSize: 15, lineHeight: '1.6' }}>
               Are you sure? This operation will delete all shifts for <strong>{parseYmdToLocalDate(deleteAllShiftsDateConfirm).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>.
             </div>
-            <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16 }}>
+            <div style={{ color: '#dc2626', fontSize: 14, marginBottom: 24, lineHeight: '1.6' }}>
               This action cannot be undone.
             </div>
             <div className="cal-dialog-buttons">
@@ -3780,10 +3780,10 @@ export default function CalendarClient() {
         <div className="cal-dialog-overlay">
           <div className="cal-dialog" style={{ maxWidth: '400px' }}>
             <h3>Delete all shifts in week?</h3>
-            <div style={{ marginBottom: 16, color: '#374151', fontSize: 14 }}>
+            <div style={{ marginBottom: 20, color: '#374151', fontSize: 15, lineHeight: '1.6' }}>
               Are you sure? This operation will bulk delete <strong>{getWeekShiftCount()} shifts</strong>.
             </div>
-            <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16 }}>
+            <div style={{ color: '#dc2626', fontSize: 14, marginBottom: 24, lineHeight: '1.6' }}>
               This action cannot be undone.
             </div>
             <div className="cal-dialog-buttons">
@@ -4837,6 +4837,13 @@ export default function CalendarClient() {
           box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
           max-height: 80vh;
           overflow-y: auto;
+        }
+
+        .cal-dialog h3 {
+          margin: 0 0 20px 0;
+          color: #111827;
+          font-size: 20px;
+          font-weight: 600;
         }
 
         .cal-copy-dialog {
