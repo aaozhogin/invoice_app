@@ -2202,10 +2202,19 @@ export default function CalendarClient() {
       }
 
       console.log('✅ All shifts to insert:', allInserts.length)
-      console.log('Shifts skipped due to overlaps:', weeksWithOverlaps.length > 0 ? `Some shifts in weeks: ${weeksWithOverlaps.join(', ')}` : 'None')
+      console.log('Weeks with overlaps:', weeksWithOverlaps.length > 0 ? `${weeksWithOverlaps.join(', ')}` : 'None')
+
+      if (weeksWithOverlaps.length > 0) {
+        const weeksList = weeksWithOverlaps.map(d => {
+          const date = parseYmdToLocalDate(d)
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        }).join(', ')
+        setCopyWeekError(`Cannot copy to the following weeks due to triple overlap: ${weeksList}`)
+        return
+      }
 
       if (allInserts.length === 0) {
-        setCopyWeekError('No shifts could be copied (all would cause triple overlaps)')
+        setCopyWeekError('No shifts could be copied')
         return
       }
 
