@@ -529,12 +529,11 @@ export async function POST(req: Request) {
     const filename = `Invoice_${invoiceNumber}_${invoiceDate}.xlsx`
 
     // Save invoice record to database
+    let invoiceRecord: any = null
     try {
       const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
       
-      // Create a data URL or store filename for future retrieval
-      // For now, we'll just save the metadata and generate the file on demand
-      const { data: invoiceRecord, error: invoiceError } = await supabase
+      const { data, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
           invoice_number: invoiceNumber,
@@ -550,20 +549,23 @@ export async function POST(req: Request) {
 
       if (invoiceError) {
         console.warn('Failed to save invoice record:', invoiceError)
-        // Continue anyway - still return the file even if record save fails
+      } else {
+        invoiceRecord = data?.[0]
       }
     } catch (err) {
       console.warn('Error saving invoice record:', err)
-      // Continue anyway - still return the file
     }
 
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`
+    // Return JSON with file buffer as base64 and invoice record
+    return NextResponse.json({
+      success: true,
+      invoice: invoiceRecord,
+      file: {
+        name: filename,
+        data: Buffer.from(buffer).toString('base64'),
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       }
-    })
+    }, { status: 200 })
   } catch (err) {
     console.error('Invoice generation failed', err)
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'

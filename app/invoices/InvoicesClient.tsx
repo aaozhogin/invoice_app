@@ -27,6 +27,15 @@ export default function InvoicesClient() {
     fetchInvoices()
   }, [])
 
+  useEffect(() => {
+    // Listen for invoice generation events from the calendar
+    const handleInvoiceGenerated = () => {
+      fetchInvoices()
+    }
+    window.addEventListener('invoiceGenerated', handleInvoiceGenerated)
+    return () => window.removeEventListener('invoiceGenerated', handleInvoiceGenerated)
+  }, [])
+
   const fetchInvoices = async () => {
     try {
       setIsLoading(true)

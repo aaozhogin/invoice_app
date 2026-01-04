@@ -2256,17 +2256,36 @@ export default function CalendarClient() {
             throw new Error(details?.error || 'Failed to generate invoice.')
           }
 
-          const blob = await res.blob()
-          const url = URL.createObjectURL(blob)
-          const link = document.createElement('a')
-          link.href = url
-          link.download = `Invoice_${invoiceNumber.trim() || payload.invoiceDate}.xlsx`
-          document.body.appendChild(link)
-          link.click()
-          link.remove()
-          URL.revokeObjectURL(url)
+          const json = await res.json()
+          
+          // Download the file if provided
+          if (json.file?.data) {
+            const binaryString = atob(json.file.data)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
+            }
+            const blob = new Blob([bytes], { type: json.file.mimeType })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = json.file.name
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            URL.revokeObjectURL(url)
+          }
 
+          setInvoiceError(null)
           setShowInvoiceDialog(false)
+          setInvoiceNumber('')
+          setInvoiceCarerIds([])
+          
+          // Refresh invoice list if it was loaded
+          if (typeof window !== 'undefined') {
+            // Dispatch custom event to notify invoices page to refresh
+            window.dispatchEvent(new CustomEvent('invoiceGenerated'))
+          }
         } catch (err) {
           setInvoiceError(err instanceof Error ? err.message : 'Failed to generate invoice.')
         } finally {
