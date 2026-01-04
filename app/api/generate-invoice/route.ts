@@ -147,6 +147,21 @@ export async function POST(req: Request) {
     // @ts-ignore - Buffer type mismatch between Node.js and ExcelJS
     await workbook.xlsx.load(templateData)
     const sheet = workbook.worksheets[0]
+    
+    // Format date as DD/MM/YYYY
+    const formatDateDDMMYYYY = (dateStr: string): string => {
+      try {
+        const d = new Date(dateStr)
+        if (isNaN(d.getTime())) return dateStr
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const yyyy = d.getFullYear()
+        return `${dd}/${mm}/${yyyy}`
+      } catch {
+        return dateStr
+      }
+    }
+    
     const dueDate = (() => {
       const d = new Date(invoiceDate)
       if (!isNaN(d.getTime())) {
@@ -167,14 +182,14 @@ export async function POST(req: Request) {
       "CARER'S MOBILE": primaryCarer?.phone_number || '',
       "CARER'S EMAIL": primaryCarer?.email || '',
       'INVOICE NUMBER': invoiceNumber,
-      'INVOICE DATE': invoiceDate,
-      'INVOICE DATE + 7': dueDate,
+      'INVOICE DATE': formatDateDDMMYYYY(invoiceDate),
+      'INVOICE DATE + 7': formatDateDDMMYYYY(dueDate),
       "CARER'S ABN": primaryCarer?.abn || '',
       "CARER'S BANK ACCOUNT NAME": primaryCarer?.account_name || '',
       "CARER'S BSB": primaryCarer?.bsb || '',
       "CARER'S BANK ACCOUNT NUMBER": primaryCarer?.account_number || '',
-      "DATE FROM": dateFrom,
-      "DATE TO": dateTo,
+      "DATE FROM": formatDateDDMMYYYY(dateFrom),
+      "DATE TO": formatDateDDMMYYYY(dateTo),
       "CLIENT'S NAME": client ? `${client.first_name} ${client.last_name}` : '',
       "CLIENT'S NDIS NUMBER": client?.ndis_number ? String(client.ndis_number) : '',
       "CLIENT'S ADDRESS LINE 1": clientAddr1,
