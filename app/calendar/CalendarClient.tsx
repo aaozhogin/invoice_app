@@ -1668,6 +1668,11 @@ export default function CalendarClient() {
 
     // Use the shifts already loaded for the current day
     const sourceShifts = shifts
+    console.log(`📋 Source shifts from ${srcYmd}:`, sourceShifts.length, 'shifts')
+    sourceShifts.forEach((s, idx) => {
+      console.log(`  ${idx}: ${(s as any).carers?.first_name} ${isoToLocalHhmm(s.time_from)}-${isoToLocalHhmm(s.time_to)} (id: ${s.id})`)
+    })
+    
     if (sourceShifts.length === 0) {
       setCopyDayError('No shifts on the current day to copy')
       return
