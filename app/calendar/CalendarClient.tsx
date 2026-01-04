@@ -3607,8 +3607,11 @@ export default function CalendarClient() {
                 {(() => {
                   const weeks: { start: string; label: string }[] = []
                   const srcMonday = getMonday(currentDate)
-                  let currentMonday = new Date(srcMonday)
-                  currentMonday.setDate(currentMonday.getDate() + 7) // Start from next week
+                  const srcWeekStart = toYmdLocal(srcMonday)
+                  
+                  // Start from the first Monday in the date range, not next week
+                  const rangeStart = parseYmdToLocalDate(dateFrom)
+                  let currentMonday = getMonday(rangeStart)
 
                   const endDate = parseYmdToLocalDate(dateTo)
                   const oneYearFromNow = new Date(srcMonday)
@@ -3617,10 +3620,14 @@ export default function CalendarClient() {
 
                   while (currentMonday <= maxDate) {
                     const mondayYmd = toYmdLocal(currentMonday)
-                    const sunday = new Date(currentMonday)
-                    sunday.setDate(sunday.getDate() + 6)
-                    const label = `${currentMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                    weeks.push({ start: mondayYmd, label })
+                    
+                    // Skip the current week
+                    if (mondayYmd !== srcWeekStart) {
+                      const sunday = new Date(currentMonday)
+                      sunday.setDate(sunday.getDate() + 6)
+                      const label = `${currentMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                      weeks.push({ start: mondayYmd, label })
+                    }
                     currentMonday.setDate(currentMonday.getDate() + 7)
                   }
 
