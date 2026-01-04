@@ -3897,7 +3897,7 @@ export default function CalendarClient() {
             })()}
 
             <div className="cal-dialog-buttons">
-              <button onClick={() => { setShowShiftDialog(false); resetDrag(); }}>Cancel</button>
+              <button onClick={() => { setShowShiftDialog(false); resetDrag(); }}>Close</button>
               {editingShift && (
                 <>
                   <button 
