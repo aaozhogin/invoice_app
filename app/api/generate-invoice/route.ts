@@ -375,11 +375,13 @@ export async function POST(req: Request) {
         row.getCell(9).font = { size: 10 }
 
         // Unit Price (merged F-G and J-K above)
-        row.getCell(10).value = rate || ''
+        row.getCell(10).value = typeof rate === 'number' ? parseFloat(rate.toFixed(2)) : (rate || '')
+        row.getCell(10).numFmt = '0.00'
         row.getCell(10).alignment = { horizontal: 'center' }
         row.getCell(10).font = { size: 10 }
 
-        row.getCell(12).value = amount || ''
+        row.getCell(12).value = typeof amount === 'number' ? parseFloat(amount.toFixed(2)) : (amount || '')
+        row.getCell(12).numFmt = '0.00'
         row.getCell(12).alignment = { horizontal: 'center' }
         row.getCell(12).font = { size: 10 }
 
@@ -466,7 +468,8 @@ export async function POST(req: Request) {
       totalsRow.getCell(10).font = { bold: true, size: 10 }
       totalsRow.getCell(10).alignment = { horizontal: 'right' }
       
-      totalsRow.getCell(12).value = totalAmount
+      totalsRow.getCell(12).value = parseFloat(totalAmount.toFixed(2))
+      totalsRow.getCell(12).numFmt = '0.00'
       totalsRow.getCell(12).font = { bold: true, size: 10 }
       totalsRow.getCell(12).alignment = { horizontal: 'center' }
       
