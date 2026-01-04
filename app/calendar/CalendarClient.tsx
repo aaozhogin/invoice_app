@@ -2843,24 +2843,23 @@ export default function CalendarClient() {
                     ))}
                     
                     {dayShifts.map((shift, shiftIndex) => {
-                      const startTime = new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                      const endTime = new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                      const startMinutes = timeStringToMinutes(startTime);
-                      const endMinutes = timeStringToMinutes(endTime);
-                      const isOvernight = endMinutes < startMinutes;
-                      const duration = isOvernight ? (24 * 60 - startMinutes + endMinutes) : (endMinutes - startMinutes);
+                      // Use the same time parsing as day view
+                      const span = getLocalSpanMinutesForShift(shift);
+                      const startMinutes = span.startMin;
+                      const endMinutes = span.endMin;
+                      const displayHeight = Math.max(endMinutes - startMinutes, 60);
+                      
+                      // Get display times for the shift (handling overnight)
+                      const from = new Date(shift.time_from);
+                      const to = new Date(shift.time_to);
+                      const startTime = !isNaN(from.getTime()) ? from.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '00:00';
+                      const endTime = !isNaN(to.getTime()) ? to.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : '00:00';
                       
                       // Find overlapping shifts at same time
-                      const overlappingShifts = dayShifts.filter((s, idx) => {
-                        const sStart = timeStringToMinutes(new Date(s.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
-                        const sEnd = timeStringToMinutes(new Date(s.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
-                        const sIsOvernight = sEnd < sStart;
-                        
+                      const overlappingShifts = dayShifts.filter((s) => {
+                        const sSpan = getLocalSpanMinutesForShift(s);
                         // Check if overlaps with current shift
-                        if (sIsOvernight || isOvernight) {
-                          return !(sEnd <= startMinutes || sStart >= endMinutes);
-                        }
-                        return !(sEnd <= startMinutes || sStart >= endMinutes);
+                        return !(sSpan.endMin <= startMinutes || sSpan.startMin >= endMinutes);
                       });
                       
                       const overlapCount = overlappingShifts.length;
@@ -2874,7 +2873,7 @@ export default function CalendarClient() {
                           className="cal-week-shift-block"
                           style={{
                             top: startMinutes,
-                            height: Math.max(duration * (HOUR_HEIGHT / 60), 60),
+                            height: displayHeight,
                             left: `${shiftLeft}%`,
                             width: `${shiftWidth}%`,
                             backgroundColor: shift.carers?.color || '#3b82f6',
