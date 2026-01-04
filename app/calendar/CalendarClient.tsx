@@ -1548,6 +1548,18 @@ export default function CalendarClient() {
             overlapCount++
           }
         }
+
+        // Also check overlaps with shifts already being inserted in this batch (same target day only)
+        for (const insertedShift of inserts) {
+          if (insertedShift.shift_date === targetYmd) {
+            const insertedStart = new Date(insertedShift.time_from).getTime()
+            const insertedEnd = new Date(insertedShift.time_to).getTime()
+            
+            if (newStart < insertedEnd && newEnd > insertedStart) {
+              overlapCount++
+            }
+          }
+        }
         
         // Block if would cause 3+ concurrent shifts
         if (overlapCount >= 2) {
@@ -1718,6 +1730,20 @@ export default function CalendarClient() {
             if (newStart < existingEnd && newEnd > existingStart) {
               overlapCount++
               console.log(`⚠️ Overlap detected: New shift (${startTime}-${endTime}) overlaps with existing shift ${existing.id} (${new Date(existing.time_from).toISOString()}-${new Date(existing.time_to).toISOString()})`)
+            }
+          }
+
+          // Also check overlaps with shifts already being inserted in this batch
+          for (const insertedShift of inserts) {
+            // Only check shifts for the same target day
+            if (insertedShift.shift_date === targetYmd) {
+              const insertedStart = new Date(insertedShift.time_from).getTime()
+              const insertedEnd = new Date(insertedShift.time_to).getTime()
+              
+              if (newStart < insertedEnd && newEnd > insertedStart) {
+                overlapCount++
+                console.log(`⚠️ Overlap detected with batch shift: New shift (${startTime}-${endTime}) overlaps with batch shift (${new Date(insertedShift.time_from).toISOString()}-${new Date(insertedShift.time_to).toISOString()})`)
+              }
             }
           }
           
