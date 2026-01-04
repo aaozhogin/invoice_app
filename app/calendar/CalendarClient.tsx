@@ -4723,9 +4723,9 @@ export default function CalendarClient() {
 
         .cal-header {
           display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
+          flex-direction: column;
+          gap: 8px;
+          flex-shrink: 0;
         }
 
         .cal-date-nav {
@@ -5284,7 +5284,8 @@ export default function CalendarClient() {
           display: flex;
           gap: 0;
           overflow-x: auto;
-          height: calc(100vh - 100px);
+          flex: 1;
+          min-height: 0;
         }
 
         .cal-week-hours-column {
