@@ -1679,10 +1679,12 @@ export default function CalendarClient() {
     try {
       const supabase = getSupabaseClient()
 
-      const inserts: any[] = []
       const daysWithOverlaps: string[] = []
+      const allInserts: any[] = []
 
       for (const targetYmd of copyDaySelected) {
+        // Fresh inserts array for each target day - don't check against other days' inserts
+        const inserts: any[] = []
         // Load existing shifts for this target day AND the previous day (to catch overnight shifts)
         const prevTargetDay = new Date(parseYmdToLocalDate(targetYmd))
         prevTargetDay.setDate(prevTargetDay.getDate() - 1)
@@ -1833,6 +1835,9 @@ export default function CalendarClient() {
           inserts.push(newInsert)
           targetDayShifts.push(newInsert as any)
         }
+        
+        // Add this day's inserts to the total
+        allInserts.push(...inserts)
       }
 
       if (daysWithOverlaps.length > 0) {
@@ -1844,12 +1849,12 @@ export default function CalendarClient() {
         return
       }
 
-      if (inserts.length === 0) {
+      if (allInserts.length === 0) {
         setCopyDayError('No shifts could be copied (all would cause triple overlaps)')
         return
       }
 
-      const { error: insertError } = await supabase.from('shifts').insert(inserts)
+      const { error: insertError } = await supabase.from('shifts').insert(allInserts)
       if (insertError) throw insertError
 
       setShowCopyDayDialog(false)
