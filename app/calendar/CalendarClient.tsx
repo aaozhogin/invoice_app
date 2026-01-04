@@ -3154,7 +3154,7 @@ export default function CalendarClient() {
                           <div>{r.code}</div>
                           <div>{r.description}</div>
                           <div>{r.frameFrom} - {r.frameTo}</div>
-                          <div>{r.isSleepover ? 'SLEEPOVER' : r.hours}</div>
+                          <div>{r.isSleepover ? 'SLEEPOVER' : r.hours.toFixed(2)}</div>
                           <div>${r.rate.toFixed(2)}</div>
                           <div>${r.total.toFixed(2)}</div>
                         </div>
