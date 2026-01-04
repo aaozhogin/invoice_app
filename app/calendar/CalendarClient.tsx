@@ -5186,7 +5186,6 @@ export default function CalendarClient() {
           display: flex;
           gap: 0;
           overflow-x: auto;
-          overflow-y: auto;
           height: calc(100vh - 210px);
         }
 
@@ -5200,7 +5199,7 @@ export default function CalendarClient() {
         }
 
         .cal-week-hour-label {
-          height: ${HOUR_HEIGHT}px;
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: flex-end;
@@ -5208,7 +5207,6 @@ export default function CalendarClient() {
           font-size: 20px;
           color: var(--muted);
           font-weight: 500;
-          flex-shrink: 0;
           white-space: nowrap;
         }
 
@@ -5240,11 +5238,10 @@ export default function CalendarClient() {
         }
 
         .cal-week-timeline-area {
+          flex: 1;
           position: relative;
-          height: ${HOUR_HEIGHT * 24}px;
           background-color: var(--surface);
           border-right: 1px solid var(--border);
-          flex-shrink: 0;
         }
 
         .cal-week-hour-line {
