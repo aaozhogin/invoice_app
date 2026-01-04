@@ -1939,6 +1939,11 @@ export default function CalendarClient() {
     const srcWeekStart = toYmdLocal(srcMonday)
     const srcWeekEnd = toYmdLocal(srcSunday)
 
+    console.log('🔄 Copy Week Started')
+    console.log('Source week:', srcWeekStart, 'to', srcWeekEnd)
+    console.log('Target weeks selected:', copyWeekSelected)
+    console.log('rangeShifts count:', rangeShifts.length)
+
     if (!dateFrom || !dateTo) {
       setCopyWeekError('Set Date from and Date to first')
       return
@@ -1950,6 +1955,11 @@ export default function CalendarClient() {
 
     // Get all shifts for the source week
     const sourceWeekShifts = rangeShifts.filter(s => s.shift_date >= srcWeekStart && s.shift_date <= srcWeekEnd)
+    
+    console.log('Source week shifts:', sourceWeekShifts.length)
+    sourceWeekShifts.forEach(s => {
+      console.log(`  ${s.shift_date}: ${isoToLocalHhmm(s.time_from)} - ${isoToLocalHhmm(s.time_to)} (${s.carer_id})`)
+    })
     
     if (sourceWeekShifts.length === 0) {
       setCopyWeekError('No shifts in the current week to copy')
@@ -2036,6 +2046,7 @@ export default function CalendarClient() {
               const existingEnd = new Date(existing.time_to).getTime()
               if (newStart < existingEnd && newEnd > existingStart) {
                 overlapCount++
+                console.log(`  ⚠️ Overlap with existing: ${isoToLocalHhmm(existing.time_from)} - ${isoToLocalHhmm(existing.time_to)}`)
               }
             }
 
@@ -2045,11 +2056,15 @@ export default function CalendarClient() {
                 const insertedEnd = new Date(insertedShift.time_to).getTime()
                 if (newStart < insertedEnd && newEnd > insertedStart) {
                   overlapCount++
+                  console.log(`  ⚠️ Overlap with already-inserted: ${isoToLocalHhmm(insertedShift.time_from)} - ${isoToLocalHhmm(insertedShift.time_to)}`)
                 }
               }
             }
 
+            console.log(`  Shift ${targetYmd} ${startTime}-${endTime}: ${overlapCount} overlaps`)
+
             if (overlapCount >= 2) {
+              console.log(`  ❌ Too many overlaps! Skipping this shift.`)
               if (!weeksWithOverlaps.includes(targetWeekStart)) {
                 weeksWithOverlaps.push(targetWeekStart)
               }
@@ -2103,11 +2118,15 @@ export default function CalendarClient() {
         }
       }
 
+      console.log('✅ All shifts to insert:', allInserts.length)
+      console.log('Weeks with overlaps:', weeksWithOverlaps)
+
       if (weeksWithOverlaps.length > 0) {
         const weeksList = weeksWithOverlaps.map(d => {
           const date = parseYmdToLocalDate(d)
           return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
         }).join(', ')
+        console.log('❌ Error:', weeksList)
         setCopyWeekError(`Cannot copy to the following weeks due to triple overlap: ${weeksList}`)
         return
       }
@@ -2120,6 +2139,7 @@ export default function CalendarClient() {
       const { error: insertError } = await supabase.from('shifts').insert(allInserts)
       if (insertError) throw insertError
 
+      console.log('✨ Week copied successfully!')
       setShowCopyWeekDialog(false)
       setCopyWeekSelected([])
       setCopyWeekError(null)
@@ -2127,6 +2147,7 @@ export default function CalendarClient() {
       await fetchData()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to copy week'
+      console.error('💥 Copy week failed:', msg)
       setCopyWeekError(msg)
     } finally {
       setCopyWeekIsWorking(false)
