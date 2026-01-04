@@ -3741,48 +3741,50 @@ export default function CalendarClient() {
       </div>
       )}
 
-      <div className="cal-footer">
-        {carerTotals.length === 0 ? (
-          <span className="cal-footer-muted">No totals yet</span>
-        ) : (
-          (() => {
-            const colCount = Math.max(1, carerTotals.length + 1)
-            return (
-              <div
-                className="cal-footer-grid"
-                style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
-              >
-                {carerTotals.map((c, idx) => (
-                  <div
-                    key={c.carerId}
-                    className={`cal-footer-cell ${idx === 0 ? 'first-cell' : ''}`}
-                  >
-                    <span className="cal-footer-label">{c.name}</span>
-                    <span className="cal-footer-value">{c.totalHours.toFixed(2)}h · ${c.totalCost.toFixed(2)}</span>
-                  </div>
-                ))}
-
-                <div className="cal-footer-cell overlap-cell">
-                  <span className="cal-footer-label">Overlap</span>
-                  <span className="cal-footer-value">
-                    {(overlapSummary?.overlapHours ?? 0).toFixed(2)}h · ${(overlapSummary?.overlapCost ?? 0).toFixed(2)}
-                  </span>
-                </div>
-
+      {dateFrom && dateTo && (
+        <div className="cal-footer">
+          {carerTotals.length === 0 ? (
+            <span className="cal-footer-muted">No totals yet</span>
+          ) : (
+            (() => {
+              const colCount = Math.max(1, carerTotals.length + 1)
+              return (
                 <div
-                  className="cal-footer-cell cal-footer-overall"
-                  style={{ gridColumn: `1 / span ${colCount}` }}
+                  className="cal-footer-grid"
+                  style={{ gridTemplateColumns: `repeat(${colCount}, 1fr)` }}
                 >
-                  <span className="cal-footer-label">Overall (excl. HIREUP)</span>
-                  <span className="cal-footer-value">{overallTotals.totalHours.toFixed(2)}h</span>
-                  <span className="cal-footer-divider">·</span>
-                  <span className="cal-footer-value">${overallTotals.totalCost.toFixed(2)}</span>
+                  {carerTotals.map((c, idx) => (
+                    <div
+                      key={c.carerId}
+                      className={`cal-footer-cell ${idx === 0 ? 'first-cell' : ''}`}
+                    >
+                      <span className="cal-footer-label">{c.name}</span>
+                      <span className="cal-footer-value">{c.totalHours.toFixed(2)}h · ${c.totalCost.toFixed(2)}</span>
+                    </div>
+                  ))}
+
+                  <div className="cal-footer-cell overlap-cell">
+                    <span className="cal-footer-label">Overlap</span>
+                    <span className="cal-footer-value">
+                      {(overlapSummary?.overlapHours ?? 0).toFixed(2)}h · ${(overlapSummary?.overlapCost ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div
+                    className="cal-footer-cell cal-footer-overall"
+                    style={{ gridColumn: `1 / span ${colCount}` }}
+                  >
+                    <span className="cal-footer-label">Overall (excl. HIREUP)</span>
+                    <span className="cal-footer-value">{overallTotals.totalHours.toFixed(2)}h</span>
+                    <span className="cal-footer-divider">·</span>
+                    <span className="cal-footer-value">${overallTotals.totalCost.toFixed(2)}</span>
+                  </div>
                 </div>
-              </div>
-            )
-          })()
-        )}
-      </div>
+              )
+            })()
+          )}
+        </div>
+      )}
 
       {/* Shift Creation Dialog */}
       {showShiftDialog && (
