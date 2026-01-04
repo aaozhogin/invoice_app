@@ -2855,8 +2855,14 @@ export default function CalendarClient() {
                   
                   <div className="cal-week-timeline-area">
                     {Array.from({ length: 24 }, (_, i) => (
-                      <div key={i} className="cal-week-hour-line" style={{ top: i * HOUR_HEIGHT }} />
+                      <div key={i} className="cal-week-hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} />
                     ))}
+                    
+                    {dayShifts.length === 0 && (
+                      <div style={{ padding: '12px', color: 'var(--text-secondary)', fontSize: '0.85em' }}>
+                        No shifts
+                      </div>
+                    )}
                     
                     {dayShifts.map((shift, shiftIndex) => {
                       // Use the same time parsing as day view
