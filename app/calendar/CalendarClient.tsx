@@ -2829,7 +2829,9 @@ export default function CalendarClient() {
 
       {viewMode === 'week' ? (
         // Week View with Timeline
-        <div className="cal-week-view">
+        <>
+          {typeof window !== 'undefined' && (console.log('📺 Rendering WEEK view with', rangeShifts.length, 'shifts'), null)}
+          <div className="cal-week-view">
           <div className="cal-week-hours-column">
             {hours.map((hour, index) => (
               <div key={index} className="cal-week-hour-label">
@@ -2931,6 +2933,7 @@ export default function CalendarClient() {
             })}
           </div>
         </div>
+        </>
       ) : (
         // Day View
         <div className="cal-main-container">
