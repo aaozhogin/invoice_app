@@ -3879,17 +3879,17 @@ export default function CalendarClient() {
 
         .view-toggle-btn {
           padding: 8px 16px;
-          background-color: var(--surface-accent);
-          color: var(--text);
-          border: 1px solid var(--border);
+          border: 1px solid #d1d5db;
           border-radius: 6px;
+          background: white;
           cursor: pointer;
-          font-weight: 500;
+          font-size: 14px;
           transition: background-color 0.2s;
+          font-weight: 500;
         }
 
         .view-toggle-btn:hover {
-          background-color: var(--surface-hover);
+          background: #f9fafb;
         }
 
         .cal-week-container {
