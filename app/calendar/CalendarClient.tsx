@@ -1520,7 +1520,15 @@ export default function CalendarClient() {
           supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd)
         ])
         
-        const allExistingShifts = [...(currentDayShiftsRes.data || []), ...(prevDayShiftsRes.data || [])]
+        // For previous day shifts, only include those that extend into the target day (end time > target day start)
+        const targetDayStart = buildUtcIsoFromLocal(targetYmd, '00:00')
+        const prevDayShifts = (prevDayShiftsRes.data || []).filter(shift => {
+          const endTime = new Date(shift.time_to).getTime()
+          const targetStart = new Date(targetDayStart).getTime()
+          return endTime > targetStart
+        })
+        
+        const allExistingShifts = [...(currentDayShiftsRes.data || []), ...prevDayShifts]
         const originalExistingShifts = [...allExistingShifts]
 
         const startDateTime = buildUtcIsoFromLocal(targetYmd, startTime)
@@ -1685,8 +1693,16 @@ export default function CalendarClient() {
           supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd).eq('client_id', selectedClientId)
         ])
         
-        // Merge shifts from target day and previous day (to catch overnight shifts extending into target day)
-        const allExistingShifts = [...(currentDayShiftsRes.data || []), ...(prevDayShiftsRes.data || [])]
+        // For previous day shifts, only include those that extend into the target day (end time > target day start)
+        const targetDayStart = buildUtcIsoFromLocal(targetYmd, '00:00')
+        const prevDayShifts = (prevDayShiftsRes.data || []).filter(shift => {
+          const endTime = new Date(shift.time_to).getTime()
+          const targetStart = new Date(targetDayStart).getTime()
+          return endTime > targetStart
+        })
+        
+        // Merge shifts from target day and previous day (only those that extend into target day)
+        const allExistingShifts = [...(currentDayShiftsRes.data || []), ...prevDayShifts]
         
         console.log(`🎯 Target day ${targetYmd} for client ${selectedClientId}: Found ${allExistingShifts.length} existing shifts (${currentDayShiftsRes.data?.length || 0} from ${targetYmd} + ${prevDayShiftsRes.data?.length || 0} from previous day ${prevTargetYmd})`, allExistingShifts)
         
