@@ -46,6 +46,7 @@ export default function SidebarClient() {
           font-weight: bold;
           border-bottom: 1px solid var(--border);
           color: var(--text);
+          text-align: center;
         }
         
         .nav-link {
@@ -54,6 +55,10 @@ export default function SidebarClient() {
           text-decoration: none;
           border-bottom: 1px solid var(--border);
           transition: background-color 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
         }
         
         .nav-link:hover {

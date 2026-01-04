@@ -160,6 +160,13 @@ export default function CalendarClient() {
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState<number>(0)
   const [dragEnd, setDragEnd] = useState<number>(0)
+  const [weekDragState, setWeekDragState] = useState({
+    isDragging: false,
+    dayYmd: '',
+    startY: 0,
+    endY: 0,
+    timelineRef: null as HTMLElement | null
+  })
   const [showShiftDialog, setShowShiftDialog] = useState(false)
   const [newShift, setNewShift] = useState<NewShift>({
     shift_date: '',
@@ -300,16 +307,21 @@ export default function CalendarClient() {
       console.log('✅ Supabase client created')
       
       const dayYmd = toYmdLocal(currentDate)
-      let rangeFrom = dateFrom || dayYmd
-      let rangeTo = dateTo || dayYmd
+      
+      // For footer totals, always use the full dateFrom/dateTo range
+      let footerRangeFrom = dateFrom || dayYmd
+      let footerRangeTo = dateTo || dayYmd
 
-      // If in week view, load shifts for the entire week
+      // For week view display, use the current week
+      let displayRangeFrom = footerRangeFrom
+      let displayRangeTo = footerRangeTo
+      
       if (viewMode === 'week') {
         const monday = getMonday(currentDate)
         const sunday = getSunday(currentDate)
-        rangeFrom = toYmdLocal(monday)
-        rangeTo = toYmdLocal(sunday)
-        console.log('📅 Week view date range:', { rangeFrom, rangeTo, currentDate: toYmdLocal(currentDate) })
+        displayRangeFrom = toYmdLocal(monday)
+        displayRangeTo = toYmdLocal(sunday)
+        console.log('📅 Week view display range:', { displayRangeFrom, displayRangeTo, currentDate: toYmdLocal(currentDate) })
       }
 
       // For the current day view, also load shifts from the previous day to catch overnight shifts
@@ -317,7 +329,7 @@ export default function CalendarClient() {
       prevDay.setDate(prevDay.getDate() - 1)
       const prevDayYmd = toYmdLocal(prevDay)
 
-      const [carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes] = await Promise.all([
+      const [carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes, footerShiftsRes] = await Promise.all([
         supabase.from('carers').select('*, color').order('first_name'),
         supabase.from('line_items').select('id, code, category, description, time_from, time_to, billed_rate, weekday, saturday, sunday, sleepover, public_holiday').order('category'),
         supabase.from('clients').select('*').order('first_name'),
@@ -333,15 +345,23 @@ export default function CalendarClient() {
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
         `).eq('shift_date', prevDayYmd).order('time_from'),
+        // Load shifts for week view display
         supabase.from('shifts').select(`
           *,
           carers(id, first_name, last_name, email, color),
           clients(id, first_name, last_name),
           line_items(id, code, category, description, billed_rate, sleepover, public_holiday)
-        `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
+        `).gte('shift_date', displayRangeFrom).lte('shift_date', displayRangeTo),
+        // Load shifts for footer totals (full date range)
+        supabase.from('shifts').select(`
+          *,
+          carers(id, first_name, last_name, email, color),
+          clients(id, first_name, last_name),
+          line_items(id, code, category, description, billed_rate, sleepover, public_holiday)
+        `).gte('shift_date', footerRangeFrom).lte('shift_date', footerRangeTo)
       ])
 
-      console.log('📊 Raw responses:', { carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes })
+      console.log('📊 Raw responses:', { carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes, footerShiftsRes })
 
       if (carersRes.error) {
         console.error('❌ Carers error:', carersRes.error)
@@ -366,6 +386,10 @@ export default function CalendarClient() {
       if (rangeShiftsRes.error) {
         console.error('❌ Range shifts error:', rangeShiftsRes.error)
         throw rangeShiftsRes.error
+      }
+      if (footerShiftsRes.error) {
+        console.error('❌ Footer shifts error:', footerShiftsRes.error)
+        throw footerShiftsRes.error
       }
 
       // Merge shifts from today and yesterday (to show overnight shifts extending into today)
@@ -434,7 +458,18 @@ export default function CalendarClient() {
       console.log('✅ Setting rangeShifts:', rangeShiftsWithClients.length, 'shifts (directly from result)')
       setRangeShifts(rangeShiftsWithClients)
 
-      const { carerTotals, overlapSummary, overallTotals } = computeSidebarAggregates(filteredRangeShifts)
+      // For footer totals, use the full date range (footerShiftsRes)
+      const filteredFooterShifts = (footerShiftsRes.data || []).filter(
+        s => !selectedClientId || s.client_id === selectedClientId
+      )
+      
+      const footerShiftsWithClients = (filteredFooterShifts || []).map(shift => ({
+        ...shift,
+        shift_date: typeof shift.shift_date === 'string' ? shift.shift_date : toYmdLocal(new Date(shift.shift_date)),
+        clients: shift.clients || (shift.client_id ? clientsMap.get(shift.client_id) : null)
+      }))
+
+      const { carerTotals, overlapSummary, overallTotals } = computeSidebarAggregates(footerShiftsWithClients)
       setCarerTotals(carerTotals)
       setOverlapSummary(carerTotals.length === 0 ? null : overlapSummary)
       setOverallTotals(overallTotals)
@@ -677,6 +712,76 @@ export default function CalendarClient() {
     setDragEnd(y)
     
     e.preventDefault()
+  }
+
+  const handleWeekMouseDown = (e: React.MouseEvent, dayYmd: string) => {
+    const target = e.target as HTMLElement
+    // Only start dragging if clicking on the timeline area itself, not on a shift
+    if (target.classList.contains('cal-week-timeline-area') || target.classList.contains('cal-week-hour-line')) {
+      const rect = (target.closest('.cal-week-timeline-area') as HTMLElement)?.getBoundingClientRect()
+      if (!rect) return
+      
+      const y = e.clientY - rect.top
+      
+      setWeekDragState({
+        isDragging: true,
+        dayYmd,
+        startY: y,
+        endY: y,
+        timelineRef: target.closest('.cal-week-timeline-area') as HTMLElement
+      })
+      
+      e.preventDefault()
+    }
+  }
+
+  const handleWeekMouseMove = (e: React.MouseEvent) => {
+    if (!weekDragState.isDragging || !weekDragState.timelineRef) return
+    
+    const rect = weekDragState.timelineRef.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const maxY = rect.height
+    
+    const constrainedY = Math.max(0, Math.min(y, maxY))
+    setWeekDragState(prev => ({ ...prev, endY: constrainedY }))
+  }
+
+  const handleWeekMouseUp = (e: React.MouseEvent) => {
+    if (!weekDragState.isDragging) return
+
+    let finalY = weekDragState.endY
+    let containerHeight = 840
+    if (weekDragState.timelineRef) {
+      const rect = weekDragState.timelineRef.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      containerHeight = rect.height
+      finalY = Math.max(0, Math.min(y, containerHeight))
+    }
+
+    setWeekDragState(prev => ({ ...prev, isDragging: false }))
+
+    const startY = Math.min(weekDragState.startY, finalY)
+    const endY = Math.max(weekDragState.startY, finalY)
+    const minShiftDuration = (containerHeight / 1440) * 15 // 15 minutes in pixels
+    const adjustedEndY = Math.max(endY, startY + minShiftDuration)
+    
+    const startTime = getTimeFromY(startY, containerHeight)
+    const endTime = getTimeFromY(adjustedEndY, containerHeight)
+    
+    setNewShift({
+      shift_date: weekDragState.dayYmd,
+      start_time: startTime,
+      end_time: endTime,
+      carer_id: null,
+      client_id: null,
+      category: null,
+      line_item_code_id: null,
+      is_sleepover: false,
+      is_public_holiday: false
+    })
+    
+    setError(null) // Clear any previous errors when opening dialog
+    setShowShiftDialog(true)
   }
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -2627,9 +2732,10 @@ export default function CalendarClient() {
 
         <div className="cal-date-nav">
           <button
-            disabled={!!dateFrom && toYmdLocal(new Date(currentDate.getTime() - 24 * 60 * 60 * 1000)) < dateFrom}
+            disabled={!!dateFrom && toYmdLocal(new Date(currentDate.getTime() - (viewMode === 'day' ? 24 : 7 * 24) * 60 * 60 * 1000)) < dateFrom}
             onClick={() => {
-              const prev = new Date(currentDate.getTime() - 24 * 60 * 60 * 1000)
+              const decrement = viewMode === 'day' ? 24 : 7 * 24;
+              const prev = new Date(currentDate.getTime() - decrement * 60 * 60 * 1000)
               if (dateFrom && toYmdLocal(prev) < dateFrom) return
               setCurrentDate(prev)
             }}
@@ -2679,15 +2785,17 @@ export default function CalendarClient() {
           </button>
           {showActionsMenu && (
             <div className="cal-actions-menu">
-              <button
-                className="cal-actions-item"
-                onClick={() => {
-                  setShowActionsMenu(false)
-                  handleCopyDayClick()
-                }}
-              >
-                Copy day
-              </button>
+              {viewMode === 'day' && (
+                <button
+                  className="cal-actions-item"
+                  onClick={() => {
+                    setShowActionsMenu(false)
+                    handleCopyDayClick()
+                  }}
+                >
+                  Copy day
+                </button>
+              )}
               <button
                 className="cal-actions-item"
                 onClick={() => {
@@ -2929,7 +3037,13 @@ export default function CalendarClient() {
                     {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                   </div>
                   
-                  <div className="cal-week-timeline-area">
+                  <div 
+                    className="cal-week-timeline-area"
+                    onMouseDown={(e) => handleWeekMouseDown(e, dayYmd)}
+                    onMouseMove={handleWeekMouseMove}
+                    onMouseUp={handleWeekMouseUp}
+                    onMouseLeave={handleWeekMouseUp}
+                  >
                     {Array.from({ length: 24 }, (_, i) => (
                       <div key={i} className="cal-week-hour-line" style={{ top: `${(i / 24) * 100}%` }} />
                     ))}
@@ -3004,7 +3118,7 @@ export default function CalendarClient() {
                             height: `${heightPercent}%`,
                             left: `${shiftLeft}%`,
                             width: `${shiftWidth}%`,
-                            backgroundColor: hexToRgba(carerColor, 0.7),
+                            backgroundColor: carerColor,
                             border: borderStyle,
                             boxShadow: shadowStyle,
                             fontSize: `${fontScale}em`
@@ -3210,7 +3324,7 @@ export default function CalendarClient() {
                   left: `calc(${leftPct}% + 8px)`,
                   right: `calc(${rightPct}% + 8px)`,
                   height: `${heightPercent}%`,
-                  background: hexToRgba(carerColor, 0.5),
+                  background: carerColor,
                   border: borderStyle,
                   boxShadow: shadowStyle,
                   borderRadius: '4px',
@@ -3361,6 +3475,16 @@ export default function CalendarClient() {
             <div className="cal-dialog">
               <h3>{editingShift ? 'Edit Shift' : 'Create New Shift'}</h3>
             
+            {/* Date Field */}
+            <div className="cal-form-group">
+              <label>Date:</label>
+              <input
+                type="date"
+                value={newShift.shift_date}
+                onChange={(e) => setNewShift(prev => ({...prev, shift_date: e.target.value}))}
+              />
+            </div>
+
             {/* Time Adjustment Controls */}
             <div className="cal-time-controls">
               <div className="cal-time-group">
@@ -3577,6 +3701,7 @@ export default function CalendarClient() {
 
         .calendar-container {
           padding: 10px;
+          padding-bottom: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           height: 100vh;
           display: flex;
@@ -3624,7 +3749,7 @@ export default function CalendarClient() {
 
         .cal-actions-item {
           width: 100%;
-          text-align: left;
+          text-align: center;
           background: transparent;
           border: none;
           color: #e6eef6;
@@ -3653,7 +3778,7 @@ export default function CalendarClient() {
           min-height: 0;
           overflow: hidden;
           overflow-x: hidden;
-          height: 100%;
+          margin-bottom: 0;
         }
 
         .cal-footer {
@@ -3662,15 +3787,15 @@ export default function CalendarClient() {
           width: calc(100% - clamp(220px, 18vw, 320px) + 120px);
           right: 0;
           bottom: 0;
-          min-height: 68px;
-          padding: 14px 18px;
+          min-height: 48px;
+          padding: 8px 18px;
           background: #0f1724;
           color: var(--text);
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: stretch;
-          gap: 8px;
+          gap: 6px;
           box-sizing: border-box;
           z-index: 100;
           box-shadow: 0 -8px 20px rgba(0,0,0,0.22);
@@ -3679,7 +3804,7 @@ export default function CalendarClient() {
         .cal-footer-grid {
           display: grid;
           grid-auto-rows: auto;
-          row-gap: 10px;
+          row-gap: 6px;
           column-gap: 0;
           align-items: center;
           border-top: none;
@@ -3691,7 +3816,7 @@ export default function CalendarClient() {
           align-items: center;
           justify-content: center;
           gap: 6px;
-          padding: 4px 8px;
+          padding: 2px 8px;
           text-align: center;
           min-width: 0;
           box-sizing: border-box;
@@ -4135,14 +4260,14 @@ export default function CalendarClient() {
           grid-template-columns: repeat(7, 1fr);
           gap: 8px;
           overflow-x: auto;
-          padding-bottom: 20px;
+          padding-bottom: 0;
         }
 
         .cal-week-view {
           display: flex;
           gap: 0;
           overflow-x: auto;
-          height: calc(100vh - 300px);
+          height: calc(100vh - 210px);
         }
 
         .cal-week-hours-column {
@@ -4160,10 +4285,11 @@ export default function CalendarClient() {
           align-items: center;
           justify-content: flex-end;
           padding-right: 4px;
-          font-size: 0.85em;
-          color: var(--text-secondary);
+          font-size: 20px;
+          color: var(--muted);
           font-weight: 500;
           flex-shrink: 0;
+          white-space: nowrap;
         }
 
         .cal-week-timeline-container {
@@ -4243,6 +4369,7 @@ export default function CalendarClient() {
           cursor: pointer;
           font-size: 14px;
           transition: background-color 0.2s;
+          text-align: center;
         }
 
         .cal-button-group button:hover {

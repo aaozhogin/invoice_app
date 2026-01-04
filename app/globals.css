@@ -195,6 +195,8 @@ img, svg {
   background: rgba(125, 211, 252, 0.05);
   border: 1px solid var(--border);
   font-weight: 500;
+  text-align: center;
+  font-size: 1.5rem;
 }
 
 .nav-link:hover {
