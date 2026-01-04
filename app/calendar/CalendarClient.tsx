@@ -2794,7 +2794,9 @@ export default function CalendarClient() {
             const dayDate = new Date(getMonday(currentDate));
             dayDate.setDate(dayDate.getDate() + i);
             const dayYmd = toYmdLocal(dayDate);
-            const dayShifts = shifts.filter(s => s.shift_date === dayYmd);
+            const dayShifts = rangeShifts
+              .filter(s => s.shift_date === dayYmd)
+              .sort((a, b) => a.time_from.localeCompare(b.time_from));
             
             return (
               <div key={dayYmd} className="cal-week-day">
