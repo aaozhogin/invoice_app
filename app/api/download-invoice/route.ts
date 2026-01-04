@@ -37,7 +37,11 @@ export async function GET(req: Request) {
 
     // Regenerate the invoice by calling the generate-invoice endpoint internally
     // This ensures we get the same format as originally generated
-    const generateRes = await fetch(new URL('/api/generate-invoice', process.env.NEXTAUTH_URL || 'http://localhost:3000').toString(), {
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
+    const host = process.env.VERCEL_URL || process.env.NEXTAUTH_URL || 'localhost:3000'
+    const baseUrl = `${protocol}://${host}`
+    
+    const generateRes = await fetch(`${baseUrl}/api/generate-invoice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -55,14 +59,15 @@ export async function GET(req: Request) {
       throw new Error('Failed to generate invoice file')
     }
 
-    const buffer = await generateRes.arrayBuffer()
-    const filename = invoice.file_name
-
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`
+    const json = await generateRes.json()
+    
+    // Return the base64 file data as JSON so the client can handle it
+    return NextResponse.json({
+      success: true,
+      file: {
+        name: json.file.name,
+        data: json.file.data,
+        mimeType: json.file.mimeType
       }
     })
   } catch (err) {

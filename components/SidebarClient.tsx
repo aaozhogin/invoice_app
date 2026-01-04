@@ -28,10 +28,4 @@ export default function SidebarClient() {
         Line Item Codes
       </Link>
 
-      <Link href="/settings" className="nav-link">
-        Settings
-      </Link>
 
-    </aside>
-  )
-}

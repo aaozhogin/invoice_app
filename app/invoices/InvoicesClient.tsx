@@ -22,6 +22,7 @@ export default function InvoicesClient() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchInvoices()
@@ -63,6 +64,39 @@ export default function InvoicesClient() {
       setError(err instanceof Error ? err.message : 'Failed to delete invoice')
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleDownload = async (invoice: InvoiceRecord) => {
+    try {
+      setDownloadingId(invoice.id)
+      const res = await fetch(`/api/download-invoice?number=${encodeURIComponent(invoice.invoice_number)}&date=${invoice.invoice_date}`)
+      if (!res.ok) throw new Error('Failed to download invoice')
+      
+      const json = await res.json()
+      if (!json.success || !json.file) throw new Error('Invalid response format')
+      
+      // Decode base64 file data
+      const binaryString = atob(json.file.data)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      
+      // Create blob and download
+      const blob = new Blob([bytes], { type: json.file.mimeType })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = json.file.name
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download invoice')
+    } finally {
+      setDownloadingId(null)
     }
   }
 
@@ -143,6 +177,7 @@ export default function InvoicesClient() {
           }}>
             <thead>
               <tr style={{ backgroundColor: '#1e293b', borderBottom: '2px solid #334155' }}>
+                <th style={{ padding: '1rem', textAlign: 'center', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155', width: '50px' }}>No.</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Invoice #</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Carer</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Client</th>
@@ -150,16 +185,20 @@ export default function InvoicesClient() {
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Date To</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Invoice Date</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Generated</th>
+                <th style={{ padding: '1rem', textAlign: 'right', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Total Amount</th>
                 <th style={{ padding: '1rem', textAlign: 'center', color: '#7dd3fc', fontWeight: 'bold', borderRight: '1px solid #334155' }}>Download</th>
                 <th style={{ padding: '1rem', textAlign: 'center', color: '#7dd3fc', fontWeight: 'bold' }}>Delete</th>
               </tr>
             </thead>
             <tbody>
-              {invoices.map((invoice) => (
+              {invoices.map((invoice, idx) => (
                 <tr key={invoice.id} style={{
                   borderBottom: '1px solid #334155',
                   backgroundColor: '#0f172a'
                 }}>
+                  <td style={{ padding: '1rem', color: '#94a3b8', textAlign: 'center', borderRight: '1px solid #334155', fontSize: '0.9rem' }}>
+                    {idx + 1}
+                  </td>
                   <td style={{ padding: '1rem', color: '#e2e8f0', borderRight: '1px solid #334155', fontWeight: '500' }}>
                     {invoice.invoice_number}
                   </td>
@@ -181,23 +220,26 @@ export default function InvoicesClient() {
                   <td style={{ padding: '1rem', color: '#cbd5e1', borderRight: '1px solid #334155', fontSize: '0.9rem' }}>
                     {formatDateTime(invoice.created_at)}
                   </td>
+                  <td style={{ padding: '1rem', color: '#e2e8f0', borderRight: '1px solid #334155', fontWeight: '500', textAlign: 'right' }}>
+                    $0.00
+                  </td>
                   <td style={{ padding: '1rem', textAlign: 'center', borderRight: '1px solid #334155' }}>
-                    <a
-                      href={invoice.file_path}
-                      download={invoice.file_path.split('/').pop()}
+                    <button
+                      onClick={() => handleDownload(invoice)}
+                      disabled={downloadingId === invoice.id}
                       style={{
                         padding: '0.5rem 1rem',
-                        backgroundColor: '#3b82f6',
+                        backgroundColor: downloadingId === invoice.id ? '#9ca3af' : '#3b82f6',
                         color: '#fff',
-                        textDecoration: 'none',
+                        border: 'none',
                         borderRadius: '4px',
                         fontSize: '0.9rem',
-                        cursor: 'pointer',
-                        display: 'inline-block'
+                        cursor: downloadingId === invoice.id ? 'not-allowed' : 'pointer',
+                        opacity: downloadingId === invoice.id ? 0.6 : 1
                       }}
                     >
-                      Download
-                    </a>
+                      {downloadingId === invoice.id ? 'Downloading...' : 'Download'}
+                    </button>
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center' }}>
                     <button
