@@ -16,6 +16,7 @@ interface InvoiceRequestBody {
   clientId?: number
   dateFrom?: string
   dateTo?: string
+  timezoneOffset?: number // Browser's timezone offset in minutes
 }
 
 const squareTokenRegex = /\[([^\]]+)\]/g
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
   const clientId = body.clientId
   const dateFrom = body.dateFrom || invoiceDate
   const dateTo = body.dateTo || invoiceDate
+  const timezoneOffset = body.timezoneOffset ?? 0 // Browser's timezone offset in minutes
 
   if (!carerIds.length) {
     return NextResponse.json({ error: 'carerId is required.' }, { status: 400 })
@@ -275,17 +277,21 @@ export async function POST(req: Request) {
 
     const parseTimeToDate = (t: string) => {
       if (!t) return ''
-      // Extract time string from ISO timestamp (e.g., "2025-12-29T03:00:00.000Z" -> "03:00:00")
-      // The time part after T represents UTC time, but we want to display it as-is
-      const timePart = t.includes('T') ? t.split('T')[1]?.split('.')[0] : t.split('.')[0]
-      if (!timePart) return t
+      // Parse the UTC timestamp from database
+      const dt = new Date(t)
+      if (Number.isNaN(dt.getTime())) return t
       
-      const [hours, minutes, seconds] = timePart.split(':').map(Number)
+      // Apply the browser's timezone offset to reverse the conversion that happened
+      // when buildUtcIsoFromLocal was called. This converts UTC back to the user's local time.
+      const offsetMs = timezoneOffset * 60 * 1000
+      const localDate = new Date(dt.getTime() + offsetMs)
       
-      // Create a date using local constructor (not UTC) so Excel displays the time as-is
-      // This prevents Excel from applying timezone conversion
-      const localDate = new Date(1970, 0, 1, hours || 0, minutes || 0, seconds || 0)
-      return localDate
+      // Format as HH:MM AM/PM
+      const hours12 = localDate.getUTCHours() % 12 || 12
+      const ampm = localDate.getUTCHours() < 12 ? 'AM' : 'PM'
+      const minutes = localDate.getUTCMinutes()
+      
+      return `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`
     }
 
     // Clear placeholder rows in the template

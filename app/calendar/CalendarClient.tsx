@@ -2230,13 +2230,15 @@ export default function CalendarClient() {
         }
 
         const fallbackDate = toYmdLocal(currentDate)
+        const timezoneOffset = new Date().getTimezoneOffset() // Browser's UTC offset in minutes
         const payload = {
           invoiceDate: invoiceDate || fallbackDate,
           invoiceNumber: invoiceNumber.trim(),
           carerIds: invoiceCarerIds,
           clientId: selectedClientId || undefined,
           dateFrom: dateFrom || fallbackDate,
-          dateTo: dateTo || fallbackDate
+          dateTo: dateTo || fallbackDate,
+          timezoneOffset: -timezoneOffset // Negate because getTimezoneOffset returns negative for UTC+ zones
         }
 
         try {
