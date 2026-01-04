@@ -1356,6 +1356,7 @@ export default function CalendarClient() {
 
     // Calculate the start of the target day (00:00 in local time)
     const targetDayStart = new Date(buildUtcIsoFromLocal(shiftDate, '00:00')).getTime()
+    const prevDayStr = addDaysToYmd(shiftDate, -1)
 
     for (const s of shifts) {
       if (excludeShiftId && s.id === excludeShiftId) continue
@@ -1365,8 +1366,8 @@ export default function CalendarClient() {
 
       // Include shift if:
       // 1. It's on the same date, OR
-      // 2. It's from the previous day and extends past midnight into the target day
-      if (s.shift_date === shiftDate || (existingEnd > targetDayStart)) {
+      // 2. It's from the previous day AND extends past midnight into the target day
+      if (s.shift_date === shiftDate || (s.shift_date === prevDayStr && existingEnd > targetDayStart)) {
         events.push({ t: existingStart, kind: 'start' })
         events.push({ t: existingEnd, kind: 'end' })
       }
