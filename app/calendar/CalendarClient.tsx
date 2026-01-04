@@ -4077,13 +4077,14 @@ export default function CalendarClient() {
                       const shiftLeft = overlapIndex * (100 / overlapCount);
                       
                       // Convert hex to rgba for consistent opacity
-                      const carerColor = shift.carers?.color || '#3b82f6';
-                      const hexToRgba = (hex: string, alpha: number = 0.7) => {
+                      const carerColorHex = shift.carers?.color || '#3b82f6';
+                      const hexToRgbaWeek = (hex: string, alpha: number = 0.65) => {
                         const r = parseInt(hex.slice(1, 3), 16);
                         const g = parseInt(hex.slice(3, 5), 16);
                         const b = parseInt(hex.slice(5, 7), 16);
                         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
                       };
+                      const carerColor = hexToRgbaWeek(carerColorHex, 0.65);
                       
                       // Check for special shift types
                       const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
@@ -4272,8 +4273,18 @@ export default function CalendarClient() {
             const rightPct = (layout.colCount - layout.col - 1) * pct
             
             // Get carer color: use assigned color, or fallback to consistent color based on carer ID
-            const carerColor = (shift.carers as any)?.color || 
+            const carerColorHex = (shift.carers as any)?.color || 
                                DEFAULT_CARER_COLORS[shift.carer_id % DEFAULT_CARER_COLORS.length]
+            
+            // Convert hex to rgba with transparency for shift tiles
+            const hexToRgba = (hex: string, alpha: number = 0.65) => {
+              const r = parseInt(hex.slice(1, 3), 16)
+              const g = parseInt(hex.slice(3, 5), 16) 
+              const b = parseInt(hex.slice(5, 7), 16)
+              return `rgba(${r}, ${g}, ${b}, ${alpha})`
+            }
+            
+            const carerColor = hexToRgba(carerColorHex, 0.65)
             
             // Check if this is a HIREUP shift
             const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
@@ -4282,13 +4293,6 @@ export default function CalendarClient() {
             const displayCategory = (shift as any).category || (shift as any).line_items?.category || 'Unknown Category'
             const displayDescription = (shift as any).line_items?.description || displayCategory
             
-            // Convert hex to rgba for background
-            const hexToRgba = (hex: string, alpha: number = 0.7) => {
-              const r = parseInt(hex.slice(1, 3), 16)
-              const g = parseInt(hex.slice(3, 5), 16) 
-              const b = parseInt(hex.slice(5, 7), 16)
-              return `rgba(${r}, ${g}, ${b}, ${alpha})`
-            }
             
             const span = getLocalSpanMinutesForShift(shift)
             const shiftHours = Math.max(0, Math.round(((span.endMin - span.startMin) / 60) * 100) / 100)
@@ -4319,7 +4323,7 @@ export default function CalendarClient() {
                   border: borderStyle,
                   boxShadow: shadowStyle,
                   borderRadius: '4px',
-                  padding: '4px 8px',
+                  padding: `${Math.max(2, baseTileFontPx * 0.3)}px ${Math.max(4, baseTileFontPx * 0.6)}px`,
                   color: '#fff',
                   fontSize: `${baseTileFontPx}px`,
                   fontWeight: '600',
@@ -4710,10 +4714,9 @@ export default function CalendarClient() {
         }
 
         .calendar-container {
-          padding: 10px;
-          padding-bottom: 0;
+          padding: 12px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          height: 100vh;
+          height: 100%;
           display: flex;
           flex-direction: column;
           gap: 8px;
@@ -4723,25 +4726,45 @@ export default function CalendarClient() {
 
         .cal-header {
           display: flex;
-          flex-direction: column;
-          gap: 8px;
+          flex-direction: row;
+          gap: 12px;
+          flex-shrink: 0;
+          align-items: center;
+          justify-content: flex-start;
+          min-height: auto;
+          flex-wrap: wrap;
+        }
+        
+        .cal-header h1 {
           flex-shrink: 0;
         }
 
         .cal-date-nav {
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: clamp(8px, 2vw, 20px);
+          flex-shrink: 0;
+          min-width: max-content;
+        }
+
+        .cal-date-nav button {
+          padding: clamp(6px, 1vw, 8px) clamp(8px, 1.5vw, 16px);
+          font-size: clamp(11px, 1.2vw, 14px);
         }
 
         .cal-actions {
           position: relative;
           display: inline-block;
+          flex-shrink: 0;
+          margin-left: auto;
         }
 
         .cal-actions-btn {
           position: relative;
-          padding-right: 28px;
+          padding-right: clamp(20px, 2vw, 28px);
+          padding: clamp(6px, 1vw, 8px) clamp(8px, 1.5vw, 16px);
+          font-size: clamp(11px, 1.2vw, 14px);
+          white-space: nowrap;
         }
 
         .cal-actions-menu {
@@ -4755,17 +4778,19 @@ export default function CalendarClient() {
           padding: 6px;
           min-width: 160px;
           z-index: 200;
+          margin-top: 4px;
         }
 
         .cal-actions-item {
           width: 100%;
-          text-align: center;
+          text-align: right;
           background: transparent;
           border: none;
           color: #e6eef6;
           padding: 8px 10px;
           border-radius: 6px;
           cursor: pointer;
+          font-size: clamp(11px, 1.2vw, 14px);
         }
 
         .cal-actions-item:hover {
@@ -4773,10 +4798,12 @@ export default function CalendarClient() {
         }
 
         .cal-current-date {
-          font-size: 18px;
+          font-size: clamp(14px, 1.8vw, 18px);
           font-weight: 600;
-          min-width: 300px;
+          min-width: max-content;
           text-align: center;
+          flex-shrink: 0;
+          padding: 0 clamp(8px, 2vw, 16px);
         }
 
         .cal-main-container {
@@ -4788,15 +4815,10 @@ export default function CalendarClient() {
           min-height: 0;
           overflow: hidden;
           overflow-x: hidden;
-          margin-bottom: 0;
         }
 
         .cal-footer {
-          position: fixed;
-          left: calc(clamp(220px, 18vw, 320px) - 120px); /* shift further left to fully cover the hours gutter */
-          width: calc(100% - clamp(220px, 18vw, 320px) + 120px);
-          right: 0;
-          bottom: 0;
+          flex-shrink: 0;
           min-height: 48px;
           padding: 8px 18px;
           background: #0f1724;
@@ -4809,6 +4831,7 @@ export default function CalendarClient() {
           box-sizing: border-box;
           z-index: 100;
           box-shadow: 0 -8px 20px rgba(0,0,0,0.22);
+          border-top: 1px solid var(--border);
         }
 
         .cal-footer-grid {
@@ -4892,8 +4915,6 @@ export default function CalendarClient() {
           flex-direction: column;
           height: 100%;
           overflow: hidden;
-          transform: scaleY(0.88);
-          transform-origin: top;
         }
 
         .cal-hour-label {
@@ -4902,12 +4923,13 @@ export default function CalendarClient() {
           display: flex;
           align-items: flex-start;
           justify-content: center;
-          font-size: 20px;
+          font-size: clamp(12px, 2vw, 20px);
           color: var(--muted);
           font-weight: 500;
           border-bottom: 1px solid var(--border);
           padding-top: 1px;
           white-space: nowrap;
+          padding: 4px 2px;
         }
 
         .cal-timeline-area {
@@ -4917,8 +4939,6 @@ export default function CalendarClient() {
           cursor: crosshair;
           background: var(--card);
           user-select: none;
-          transform: scaleY(0.88);
-          transform-origin: top;
         }
 
         .cal-hour-line {
@@ -4942,13 +4962,15 @@ export default function CalendarClient() {
         }
 
         button {
-          padding: 8px 16px;
+          padding: clamp(6px, 1vw, 8px) clamp(8px, 1.5vw, 16px);
           border: 1px solid #d1d5db;
           border-radius: 6px;
           background: white;
           cursor: pointer;
-          font-size: 14px;
+          font-size: clamp(11px, 1.2vw, 14px);
           transition: background-color 0.2s;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         button:hover {
@@ -5305,7 +5327,7 @@ export default function CalendarClient() {
           align-items: center;
           justify-content: flex-end;
           padding-right: 4px;
-          font-size: 20px;
+          font-size: clamp(12px, 2vw, 20px);
           color: var(--muted);
           font-weight: 500;
           white-space: nowrap;
@@ -5322,7 +5344,7 @@ export default function CalendarClient() {
 
         .cal-week-day-timeline {
           flex: 1;
-          min-width: 160px;
+          min-width: 140px;
           display: flex;
           flex-direction: column;
           background-color: var(--surface);
@@ -5335,7 +5357,8 @@ export default function CalendarClient() {
           border-bottom: 2px solid var(--border);
           color: var(--text);
           flex-shrink: 0;
-          font-size: 0.9em;
+          font-size: clamp(0.7em, 2vw, 0.95em);
+          word-wrap: break-word;
         }
 
         .cal-week-timeline-area {
@@ -5356,15 +5379,15 @@ export default function CalendarClient() {
 
         .cal-week-shift-block {
           position: absolute;
-          padding: 6px;
-          border-radius: 4px;
-          border-left: 4px solid;
+          padding: 4px;
+          border-radius: 3px;
+          border-left: 3px solid;
           background-color: #3b82f6;
           color: white;
           cursor: pointer;
           overflow: hidden;
           transition: opacity 0.2s;
-          font-size: 1.04em;
+          font-size: clamp(0.65em, 1.5vw, 1em);
           line-height: 1.2;
           box-sizing: border-box;
           z-index: 5;
@@ -5377,18 +5400,22 @@ export default function CalendarClient() {
 
         .cal-button-group {
           display: flex;
-          gap: 8px;
+          gap: clamp(4px, 1vw, 8px);
+          flex-shrink: 0;
+          min-width: max-content;
         }
 
         .cal-button-group button {
-          padding: 8px 16px;
+          padding: clamp(6px, 1vw, 8px) clamp(8px, 1.5vw, 16px);
           border: 1px solid #d1d5db;
           border-radius: 6px;
           background: white;
           cursor: pointer;
-          font-size: 14px;
+          font-size: clamp(11px, 1.2vw, 14px);
           transition: background-color 0.2s;
           text-align: center;
+          flex-shrink: 0;
+          white-space: nowrap;
         }
 
         .cal-button-group button:hover {
