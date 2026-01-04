@@ -118,6 +118,10 @@ export default function CalendarClient() {
   const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
   const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
   const [copyDayError, setCopyDayError] = useState<string | null>(null)
+  const [showCopyShiftDialog, setShowCopyShiftDialog] = useState(false)
+  const [copyShiftSelected, setCopyShiftSelected] = useState<string[]>([])
+  const [copyShiftIsWorking, setCopyShiftIsWorking] = useState(false)
+  const [copyShiftError, setCopyShiftError] = useState<string | null>(null)
   const [showInvoiceDialog, setShowInvoiceDialog] = useState(false)
   const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
   const [invoiceNumber, setInvoiceNumber] = useState('')
@@ -670,8 +674,11 @@ export default function CalendarClient() {
         const startMins = timeToMinutes(newTime)
         const endMins = timeToMinutes(prev.end_time)
         
-        // If same time or start after end (on same day), adjust end time
-        if (startMins >= endMins) {
+        // Check if this is an overnight shift (end time is next day)
+        const isOvernight = isEndTimeNextDay(prev.start_time, prev.end_time)
+        
+        // Only auto-adjust end time if it's NOT an overnight shift and start >= end
+        if (!isOvernight && startMins >= endMins) {
           return {
             ...prev,
             start_time: newTime,
@@ -1474,6 +1481,158 @@ export default function CalendarClient() {
     }
 
     return Math.round(total * 100) / 100
+  }
+
+  const handleConfirmCopyShift = async () => {
+    if (!editingShift) {
+      setCopyShiftError('No shift selected')
+      return
+    }
+    if (!dateFrom || !dateTo) {
+      setCopyShiftError('Set Date from and Date to first')
+      return
+    }
+    if (copyShiftSelected.length === 0) {
+      setCopyShiftError('Select at least one day')
+      return
+    }
+
+    setCopyShiftIsWorking(true)
+    setCopyShiftError(null)
+
+    try {
+      const supabase = getSupabaseClient()
+      const sourceShift = editingShift
+      const startTime = isoToLocalHhmm(sourceShift.time_from)
+      const endTime = isoToLocalHhmm(sourceShift.time_to)
+
+      const inserts: any[] = []
+      const daysWithOverlaps: string[] = []
+
+      for (const targetYmd of copyShiftSelected) {
+        // Load existing shifts for this target day AND the previous day (to catch overnight shifts)
+        const prevTargetDay = new Date(parseYmdToLocalDate(targetYmd))
+        prevTargetDay.setDate(prevTargetDay.getDate() - 1)
+        const prevTargetYmd = toYmdLocal(prevTargetDay)
+        
+        const [currentDayShiftsRes, prevDayShiftsRes] = await Promise.all([
+          supabase.from('shifts').select('*').eq('shift_date', targetYmd),
+          supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd)
+        ])
+        
+        const allExistingShifts = [...(currentDayShiftsRes.data || []), ...(prevDayShiftsRes.data || [])]
+        const originalExistingShifts = [...allExistingShifts]
+
+        const startDateTime = buildUtcIsoFromLocal(targetYmd, startTime)
+        let endDateTime = buildUtcIsoFromLocal(targetYmd, endTime)
+
+        const [startHour, startMin] = startTime.split(':').map(Number)
+        const [endHour, endMin] = endTime.split(':').map(Number)
+        const startMinutes = startHour * 60 + startMin
+        const endMinutes = endHour * 60 + endMin
+        if (endMinutes <= startMinutes) {
+          const nextDayStr = addDaysToYmd(targetYmd, 1)
+          endDateTime = buildUtcIsoFromLocal(nextDayStr, endTime)
+        }
+
+        // Check for triple overlap
+        const newStart = new Date(startDateTime).getTime()
+        const newEnd = new Date(endDateTime).getTime()
+        
+        let overlapCount = 0
+        for (const existing of originalExistingShifts) {
+          const existingStart = new Date(existing.time_from).getTime()
+          const existingEnd = new Date(existing.time_to).getTime()
+          
+          if (newStart < existingEnd && newEnd > existingStart) {
+            overlapCount++
+          }
+        }
+        
+        // Block if would cause 3+ concurrent shifts
+        if (overlapCount >= 2) {
+          if (!daysWithOverlaps.includes(targetYmd)) {
+            daysWithOverlaps.push(targetYmd)
+          }
+          continue
+        }
+
+        let cost: number
+        let lineItemCodeId: string | null = null
+        const category = (sourceShift as any).category || (sourceShift as any).line_items?.category
+
+        if (category === 'HIREUP') {
+          cost = Number(sourceShift.cost || 0)
+          lineItemCodeId = null
+        } else {
+          const isSleepover = !!sourceShift.line_items?.sleepover
+          const isPublicHoliday = !!sourceShift.line_items?.public_holiday
+          const dayType = getDayTypeFromYmd(targetYmd)
+          
+          const targetLineItem = pickLineItemForShift({
+            category: category || '',
+            dayType,
+            isSleepover,
+            isPublicHoliday
+          })
+
+          if (!targetLineItem) {
+            throw new Error(`No line item found for ${category} on ${targetYmd}`)
+          }
+
+          cost = computeCostForShiftParams({
+            shiftDateYmd: targetYmd,
+            category: category || '',
+            startTime,
+            endTime,
+            isSleepover,
+            isPublicHoliday
+          })
+          lineItemCodeId = targetLineItem.id
+        }
+
+        const newInsert = {
+          shift_date: targetYmd,
+          time_from: startDateTime,
+          time_to: endDateTime,
+          carer_id: sourceShift.carer_id,
+          client_id: sourceShift.client_id,
+          line_item_code_id: lineItemCodeId,
+          category: category,
+          cost
+        }
+
+        inserts.push(newInsert)
+      }
+
+      if (daysWithOverlaps.length > 0) {
+        const daysList = daysWithOverlaps.map(d => {
+          const date = parseYmdToLocalDate(d)
+          return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        }).join(', ')
+        setCopyShiftError(`Cannot copy to the following days due to triple overlap: ${daysList}`)
+        return
+      }
+
+      if (inserts.length === 0) {
+        setCopyShiftError('No shifts could be copied (all would cause triple overlaps)')
+        return
+      }
+
+      const { error: insertError } = await supabase.from('shifts').insert(inserts)
+      if (insertError) throw insertError
+
+      await fetchData()
+      setShowCopyShiftDialog(false)
+      setCopyShiftSelected([])
+      setCopyShiftError(null)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('❌ Copy shift error:', err)
+      setCopyShiftError(msg)
+    } finally {
+      setCopyShiftIsWorking(false)
+    }
   }
 
   const handleConfirmCopyDay = async () => {
@@ -2881,6 +3040,78 @@ export default function CalendarClient() {
         </div>
       )}
 
+      {showCopyShiftDialog && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-copy-dialog">
+            <h3>Copy Shift</h3>
+            <div style={{ marginBottom: 8, color: '#374151', fontSize: 14 }}>
+              Copy shift to selected days (same time: <strong>{isoToLocalHhmm(editingShift?.time_from || '')}-{isoToLocalHhmm(editingShift?.time_to || '')}</strong>).
+            </div>
+
+            {(!dateFrom || !dateTo) ? (
+              <div style={{ color: '#dc2626', marginTop: 8 }}>
+                Set Date from and Date to first.
+              </div>
+            ) : (
+              <div className="cal-copy-days">
+                {listDaysInclusive(dateFrom, dateTo)
+                  .filter(d => d !== editingShift?.shift_date)
+                  .map((ymd) => {
+                    const checked = copyShiftSelected.includes(ymd)
+                    const label = parseYmdToLocalDate(ymd).toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                    return (
+                      <label key={ymd} className="cal-copy-day">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...copyShiftSelected, ymd]
+                              : copyShiftSelected.filter(x => x !== ymd)
+                            setCopyShiftSelected(next)
+                            setCopyShiftError(null)
+                          }}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    )
+                  })}
+              </div>
+            )}
+
+            {copyShiftError && (
+              <div className="cal-error-toast" style={{ position: 'relative', top: 0, left: 0, transform: 'none', marginTop: 10 }}>
+                Error: {copyShiftError}
+              </div>
+            )}
+
+            <div className="cal-dialog-buttons" style={{ marginTop: 16 }}>
+              <button
+                onClick={() => {
+                  setShowCopyShiftDialog(false)
+                  setCopyShiftSelected([])
+                  setCopyShiftError(null)
+                }}
+                disabled={copyShiftIsWorking}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCopyShift}
+                disabled={copyShiftIsWorking || !dateFrom || !dateTo || copyShiftSelected.length === 0}
+              >
+                {copyShiftIsWorking ? 'Copying…' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showInvoiceDialog && (
         <div className="cal-dialog-overlay">
           <div className="cal-copy-dialog">
@@ -3668,12 +3899,24 @@ export default function CalendarClient() {
             <div className="cal-dialog-buttons">
               <button onClick={() => { setShowShiftDialog(false); resetDrag(); }}>Cancel</button>
               {editingShift && (
-                <button 
-                  onClick={handleDeleteShift}
-                  style={{ backgroundColor: '#ef4444', borderColor: '#dc2626' }}
-                >
-                  Delete
-                </button>
+                <>
+                  <button 
+                    onClick={() => {
+                      setCopyShiftSelected([])
+                      setCopyShiftError(null)
+                      setShowCopyShiftDialog(true)
+                    }}
+                    style={{ backgroundColor: '#8b5cf6', borderColor: '#7c3aed' }}
+                  >
+                    Copy Shift
+                  </button>
+                  <button 
+                    onClick={handleDeleteShift}
+                    style={{ backgroundColor: '#ef4444', borderColor: '#dc2626' }}
+                  >
+                    Delete
+                  </button>
+                </>
               )}
               <button 
                 onClick={handleSaveShift} 
