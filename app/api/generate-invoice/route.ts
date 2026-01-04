@@ -66,6 +66,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invoice number is required.' }, { status: 400 })
   }
 
+  if (!clientId) {
+    return NextResponse.json({ error: 'clientId is required.' }, { status: 400 })
+  }
+
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
@@ -95,6 +99,8 @@ export async function POST(req: Request) {
       .in('carer_id', carerIds)
       .gte('shift_date', dateFrom)
       .lte('shift_date', dateTo)
+      .neq('category', 'HIREUP')
+      .eq('client_id', clientId)
       .order('shift_date', { ascending: true })
       .order('time_from', { ascending: true })
 
