@@ -221,6 +221,44 @@ export type Database = {
           created_at?: string;
         };
       };
+      invoices: {
+        Row: {
+          id: string;
+          invoice_number: string;
+          carer_id: number;
+          client_id: number;
+          date_from: string;
+          date_to: string;
+          invoice_date: string;
+          file_name: string;
+          file_path: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invoice_number: string;
+          carer_id: number;
+          client_id: number;
+          date_from: string;
+          date_to: string;
+          invoice_date: string;
+          file_name: string;
+          file_path: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          invoice_number?: string;
+          carer_id?: number;
+          client_id?: number;
+          date_from?: string;
+          date_to?: string;
+          invoice_date?: string;
+          file_name?: string;
+          file_path?: string;
+          created_at?: string;
+        };
+      };
     };
     Functions: Record<string, never>;
     Views: Record<string, never>;
@@ -233,3 +271,4 @@ export type LineItem = Database['public']['Tables']['line_items']['Row'];
 export type Carer = Database['public']['Tables']['carers']['Row'];
 export type Shift = Database['public']['Tables']['shifts']['Row'];
 export type LineItemCategory = Database['public']['Tables']['line_item_categories']['Row'];
+export type Invoice = Database['public']['Tables']['invoices']['Row'];

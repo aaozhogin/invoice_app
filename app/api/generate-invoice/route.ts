@@ -526,7 +526,36 @@ export async function POST(req: Request) {
     } catch {}
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const filename = `Invoice_${primaryCarer?.last_name || 'carer'}_${invoiceDate}.xlsx`
+    const filename = `Invoice_${invoiceNumber}_${invoiceDate}.xlsx`
+
+    // Save invoice record to database
+    try {
+      const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+      
+      // Create a data URL or store filename for future retrieval
+      // For now, we'll just save the metadata and generate the file on demand
+      const { data: invoiceRecord, error: invoiceError } = await supabase
+        .from('invoices')
+        .insert({
+          invoice_number: invoiceNumber,
+          carer_id: carerIds[0],
+          client_id: clientId,
+          date_from: dateFrom,
+          date_to: dateTo,
+          invoice_date: invoiceDate,
+          file_name: filename,
+          file_path: `/api/download-invoice?number=${invoiceNumber}&date=${invoiceDate}`
+        })
+        .select()
+
+      if (invoiceError) {
+        console.warn('Failed to save invoice record:', invoiceError)
+        // Continue anyway - still return the file even if record save fails
+      }
+    } catch (err) {
+      console.warn('Error saving invoice record:', err)
+      // Continue anyway - still return the file
+    }
 
     return new NextResponse(buffer, {
       status: 200,

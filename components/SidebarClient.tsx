@@ -15,6 +15,9 @@ export default function SidebarClient() {
       <Link href="/shifts" className="nav-link">
         Shifts
       </Link>
+      <Link href="/invoices" className="nav-link">
+        Invoices
+      </Link>
       <Link href="/carers" className="nav-link">
         Carers
       </Link>
