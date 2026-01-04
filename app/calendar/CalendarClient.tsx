@@ -5240,11 +5240,11 @@ export default function CalendarClient() {
         }
 
         .cal-week-timeline-area {
-          flex: 1;
           position: relative;
           height: ${HOUR_HEIGHT * 24}px;
           background-color: var(--surface);
           border-right: 1px solid var(--border);
+          flex-shrink: 0;
         }
 
         .cal-week-hour-line {
