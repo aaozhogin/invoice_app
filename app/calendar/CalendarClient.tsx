@@ -118,6 +118,10 @@ export default function CalendarClient() {
   const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
   const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
   const [copyDayError, setCopyDayError] = useState<string | null>(null)
+  const [showCopyWeekDialog, setShowCopyWeekDialog] = useState(false)
+  const [copyWeekSelected, setCopyWeekSelected] = useState<string[]>([])
+  const [copyWeekIsWorking, setCopyWeekIsWorking] = useState(false)
+  const [copyWeekError, setCopyWeekError] = useState<string | null>(null)
   const [showCopyShiftDialog, setShowCopyShiftDialog] = useState(false)
   const [copyShiftSelected, setCopyShiftSelected] = useState<string[]>([])
   const [copyShiftIsWorking, setCopyShiftIsWorking] = useState(false)
@@ -1907,6 +1911,206 @@ export default function CalendarClient() {
     }
   }
 
+  const handleConfirmCopyWeek = async () => {
+    const srcMonday = getMonday(currentDate)
+    const srcSunday = getSunday(currentDate)
+    const srcWeekStart = toYmdLocal(srcMonday)
+    const srcWeekEnd = toYmdLocal(srcSunday)
+
+    if (!dateFrom || !dateTo) {
+      setCopyWeekError('Set Date from and Date to first')
+      return
+    }
+    if (copyWeekSelected.length === 0) {
+      setCopyWeekError('Select at least one week')
+      return
+    }
+
+    // Get all shifts for the source week
+    const sourceWeekShifts = rangeShifts.filter(s => s.shift_date >= srcWeekStart && s.shift_date <= srcWeekEnd)
+    
+    if (sourceWeekShifts.length === 0) {
+      setCopyWeekError('No shifts in the current week to copy')
+      return
+    }
+
+    setCopyWeekIsWorking(true)
+    setCopyWeekError(null)
+
+    try {
+      const supabase = getSupabaseClient()
+      const allInserts: any[] = []
+      const weeksWithOverlaps: string[] = []
+
+      // For each target week
+      for (const targetWeekStart of copyWeekSelected) {
+        // Parse the target week start date
+        const [year, month, day] = targetWeekStart.split('-').map(Number)
+        const targetMonday = new Date(year, month - 1, day)
+        const targetSunday = new Date(targetMonday)
+        targetSunday.setDate(targetSunday.getDate() + 6)
+
+        // Copy each day of the week
+        for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+          const srcDate = new Date(srcMonday)
+          srcDate.setDate(srcDate.getDate() + dayOffset)
+          const srcYmd = toYmdLocal(srcDate)
+
+          const targetDate = new Date(targetMonday)
+          targetDate.setDate(targetDate.getDate() + dayOffset)
+          const targetYmd = toYmdLocal(targetDate)
+
+          // Get shifts for this day of the source week
+          const sourceDayShifts = sourceWeekShifts.filter(s => s.shift_date === srcYmd)
+          if (sourceDayShifts.length === 0) continue
+
+          // Load existing shifts for the target day
+          const prevTargetDay = new Date(targetDate)
+          prevTargetDay.setDate(prevTargetDay.getDate() - 1)
+          const prevTargetYmd = toYmdLocal(prevTargetDay)
+
+          const [currentDayShiftsRes, prevDayShiftsRes] = await Promise.all([
+            supabase.from('shifts').select('*').eq('shift_date', targetYmd).eq('client_id', selectedClientId),
+            supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd).eq('client_id', selectedClientId)
+          ])
+
+          const targetDayStart = buildUtcIsoFromLocal(targetYmd, '00:00')
+          const prevDayShifts = (prevDayShiftsRes.data || []).filter(shift => {
+            const endTime = new Date(shift.time_to).getTime()
+            const targetStart = new Date(targetDayStart).getTime()
+            return endTime > targetStart
+          })
+
+          const originalExistingShifts = [...(currentDayShiftsRes.data || []), ...prevDayShifts]
+          let dayHasOverlapError = false
+
+          for (const s of sourceDayShifts) {
+            const lineItemId = String((s as any).line_item_code_id ?? '')
+            const li = lineItemCodes.find(x => x.id === lineItemId)
+            const category = (s as any).category || (s as any).line_items?.category || li?.category
+            if (!category) continue
+
+            const startTime = isoToLocalHhmm(s.time_from)
+            const endTime = isoToLocalHhmm(s.time_to)
+
+            const startDateTime = buildUtcIsoFromLocal(targetYmd, startTime)
+            let endDateTime = buildUtcIsoFromLocal(targetYmd, endTime)
+
+            const [startHour, startMin] = startTime.split(':').map(Number)
+            const [endHour, endMin] = endTime.split(':').map(Number)
+            const startMinutes = startHour * 60 + startMin
+            const endMinutes = endHour * 60 + endMin
+            if (endMinutes <= startMinutes) {
+              const nextDayStr = addDaysToYmd(targetYmd, 1)
+              endDateTime = buildUtcIsoFromLocal(nextDayStr, endTime)
+            }
+
+            const newStart = new Date(startDateTime).getTime()
+            const newEnd = new Date(endDateTime).getTime()
+
+            let overlapCount = 0
+            for (const existing of originalExistingShifts) {
+              const existingStart = new Date(existing.time_from).getTime()
+              const existingEnd = new Date(existing.time_to).getTime()
+              if (newStart < existingEnd && newEnd > existingStart) {
+                overlapCount++
+              }
+            }
+
+            for (const insertedShift of allInserts) {
+              if (insertedShift.shift_date === targetYmd) {
+                const insertedStart = new Date(insertedShift.time_from).getTime()
+                const insertedEnd = new Date(insertedShift.time_to).getTime()
+                if (newStart < insertedEnd && newEnd > insertedStart) {
+                  overlapCount++
+                }
+              }
+            }
+
+            if (overlapCount >= 2) {
+              if (!weeksWithOverlaps.includes(targetWeekStart)) {
+                weeksWithOverlaps.push(targetWeekStart)
+              }
+              dayHasOverlapError = true
+              continue
+            }
+
+            let cost: number
+            let lineItemCodeId: string | null = null
+
+            if (category === 'HIREUP') {
+              cost = Number(s.cost || 0)
+              lineItemCodeId = null
+            } else {
+              const isSleepover = !!li?.sleepover
+              const isPublicHoliday = !!li?.public_holiday
+              const dayType = getDayTypeFromYmd(targetYmd)
+              const targetLineItem = pickLineItemForShift({
+                category,
+                dayType,
+                isSleepover,
+                isPublicHoliday
+              })
+
+              if (!targetLineItem) {
+                throw new Error(`No line item found for ${category} (${dayType})`)
+              }
+
+              cost = computeCostForShiftParams({
+                shiftDateYmd: targetYmd,
+                category,
+                startTime,
+                endTime,
+                isSleepover,
+                isPublicHoliday
+              })
+              lineItemCodeId = targetLineItem.id
+            }
+
+            allInserts.push({
+              shift_date: targetYmd,
+              time_from: startDateTime,
+              time_to: endDateTime,
+              carer_id: s.carer_id,
+              client_id: s.client_id,
+              line_item_code_id: lineItemCodeId,
+              category: category,
+              cost
+            })
+          }
+        }
+      }
+
+      if (weeksWithOverlaps.length > 0) {
+        const weeksList = weeksWithOverlaps.map(d => {
+          const date = parseYmdToLocalDate(d)
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })
+        }).join(', ')
+        setCopyWeekError(`Cannot copy to the following weeks due to triple overlap: ${weeksList}`)
+        return
+      }
+
+      if (allInserts.length === 0) {
+        setCopyWeekError('No shifts could be copied (all would cause triple overlaps)')
+        return
+      }
+
+      const { error: insertError } = await supabase.from('shifts').insert(allInserts)
+      if (insertError) throw insertError
+
+      setShowCopyWeekDialog(false)
+      setCopyWeekSelected([])
+      setCopyWeekError(null)
+
+      await fetchData()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to copy week'
+      setCopyWeekError(msg)
+    } finally {
+      setCopyWeekIsWorking(false)
+    }
+  }
+
   // Compute breakdown of overlapping line items and total cost
   const computeCostBreakdown = () => {
     // result rows: { code, description, frameFrom, frameTo, hours, rate, total, isSleepover }
@@ -2827,6 +3031,18 @@ export default function CalendarClient() {
     setShowCopyDayDialog(true)
   }
 
+  const handleCopyWeekClick = () => {
+    setCopyWeekError(null)
+    if (!dateFrom || !dateTo) {
+      setCopyWeekError('Set Date from and Date to first')
+      setShowCopyWeekDialog(true)
+      return
+    }
+
+    setCopyWeekSelected([])
+    setShowCopyWeekDialog(true)
+  }
+
   const hours = Array.from({ length: 24 }, (_, i) => {
     const hour = i
     if (hour === 0) return '12 AM'
@@ -3064,6 +3280,17 @@ export default function CalendarClient() {
                   Copy day
                 </button>
               )}
+              {viewMode === 'week' && (
+                <button
+                  className="cal-actions-item"
+                  onClick={() => {
+                    setShowActionsMenu(false)
+                    handleCopyWeekClick()
+                  }}
+                >
+                  Copy week
+                </button>
+              )}
               <button
                 className="cal-actions-item"
                 onClick={() => {
@@ -3143,6 +3370,91 @@ export default function CalendarClient() {
                 disabled={copyDayIsWorking || !dateFrom || !dateTo || copyDaySelected.length === 0}
               >
                 {copyDayIsWorking ? 'Copying…' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCopyWeekDialog && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-copy-dialog">
+            <h3>Copy week</h3>
+            <div style={{ marginBottom: 8, color: '#374151', fontSize: 14 }}>
+              Copy all shifts from <strong>{parseYmdToLocalDate(toYmdLocal(getMonday(currentDate))).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {parseYmdToLocalDate(toYmdLocal(getSunday(currentDate))).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</strong> to selected weeks.
+            </div>
+
+            {(!dateFrom || !dateTo) ? (
+              <div style={{ color: '#dc2626', marginTop: 8 }}>
+                Set Date from and Date to first.
+              </div>
+            ) : (
+              <div className="cal-copy-days">
+                {(() => {
+                  const weeks: { start: string; label: string }[] = []
+                  const srcMonday = getMonday(currentDate)
+                  let currentMonday = new Date(srcMonday)
+                  currentMonday.setDate(currentMonday.getDate() + 7) // Start from next week
+
+                  const endDate = parseYmdToLocalDate(dateTo)
+                  const oneYearFromNow = new Date(srcMonday)
+                  oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1)
+                  const maxDate = endDate > oneYearFromNow ? oneYearFromNow : endDate
+
+                  while (currentMonday <= maxDate) {
+                    const mondayYmd = toYmdLocal(currentMonday)
+                    const sunday = new Date(currentMonday)
+                    sunday.setDate(sunday.getDate() + 6)
+                    const label = `${currentMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                    weeks.push({ start: mondayYmd, label })
+                    currentMonday.setDate(currentMonday.getDate() + 7)
+                  }
+
+                  return weeks.map((week) => {
+                    const checked = copyWeekSelected.includes(week.start)
+                    return (
+                      <label key={week.start} className="cal-copy-day">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...copyWeekSelected, week.start]
+                              : copyWeekSelected.filter(x => x !== week.start)
+                            setCopyWeekSelected(next)
+                            setCopyWeekError(null)
+                          }}
+                        />
+                        <span>{week.label}</span>
+                      </label>
+                    )
+                  })
+                })()}
+              </div>
+            )}
+
+            {copyWeekError && (
+              <div className="cal-error-toast" style={{ position: 'relative', top: 0, left: 0, transform: 'none', marginTop: 10 }}>
+                Error: {copyWeekError}
+              </div>
+            )}
+
+            <div className="cal-dialog-buttons" style={{ marginTop: 16 }}>
+              <button
+                onClick={() => {
+                  setShowCopyWeekDialog(false)
+                  setCopyWeekSelected([])
+                  setCopyWeekError(null)
+                }}
+                disabled={copyWeekIsWorking}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCopyWeek}
+                disabled={copyWeekIsWorking || !dateFrom || !dateTo || copyWeekSelected.length === 0}
+              >
+                {copyWeekIsWorking ? 'Copying…' : 'OK'}
               </button>
             </div>
           </div>
