@@ -1666,8 +1666,9 @@ export default function CalendarClient() {
       return
     }
 
-    // Use the shifts already loaded for the current day
-    const sourceShifts = shifts
+    // Use ONLY the shifts for the current day (not including previous day shifts)
+    // The shifts state includes previous day's overnight shifts, but we only want to copy today's shifts
+    const sourceShifts = shifts.filter(s => s.shift_date === srcYmd)
     console.log(`📋 Source shifts from ${srcYmd}:`, sourceShifts.length, 'shifts')
     sourceShifts.forEach((s, idx) => {
       console.log(`  ${idx}: ${(s as any).carers?.first_name} ${isoToLocalHhmm(s.time_from)}-${isoToLocalHhmm(s.time_to)} (id: ${s.id})`)
