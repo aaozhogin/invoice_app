@@ -407,7 +407,13 @@ export default function CalendarClient() {
         shiftClientIds: rangeShiftsRes.data?.map(s => ({ id: s.id, client_id: s.client_id }))
       })
       
-      setRangeShifts(filteredRangeShifts)
+      // Ensure rangeShifts have clients data joined (same as done for shifts)
+      const rangeShiftsWithClients = filteredRangeShifts.map(shift => ({
+        ...shift,
+        clients: shift.client_id ? clientsMap.get(shift.client_id) : null
+      }))
+      
+      setRangeShifts(rangeShiftsWithClients)
 
       const { carerTotals, overlapSummary, overallTotals } = computeSidebarAggregates(filteredRangeShifts)
       setCarerTotals(carerTotals)
@@ -764,7 +770,17 @@ export default function CalendarClient() {
           time_to: s.time_to,
           carer: s.carers?.first_name
         }))
-      })
+      });
+      
+      // Debug each day
+      const monday = getMonday(currentDate);
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(monday);
+        dayDate.setDate(dayDate.getDate() + i);
+        const dayYmd = toYmdLocal(dayDate);
+        const dayShifts = rangeShifts.filter(s => s.shift_date === dayYmd);
+        console.log(`📅 ${dayYmd}: ${dayShifts.length} shifts`, dayShifts.map(s => `${s.carers?.first_name} ${s.time_from}`));
+      }
     }
   }, [viewMode, rangeShifts, currentDate])
 
