@@ -122,6 +122,7 @@ export default function CalendarClient() {
   const [invoiceCarerIds, setInvoiceCarerIds] = useState<number[]>([])
   const [invoiceCarerOptions, setInvoiceCarerOptions] = useState<{ carer: Carer; count: number }[]>([])
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
+  const [invoiceSuccess, setInvoiceSuccess] = useState<{ fileName: string; fileData: string; mimeType: string } | null>(null)
   const [invoiceIsGenerating, setInvoiceIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [carers, setCarers] = useState<Carer[]>([])
@@ -2244,6 +2245,7 @@ export default function CalendarClient() {
         try {
           setInvoiceIsGenerating(true)
           setInvoiceError(null)
+          setInvoiceSuccess(null)
 
           const res = await fetch('/api/generate-invoice', {
             method: 'POST',
@@ -2258,26 +2260,16 @@ export default function CalendarClient() {
 
           const json = await res.json()
           
-          // Download the file if provided
+          // Store file data for user to download
           if (json.file?.data) {
-            const binaryString = atob(json.file.data)
-            const bytes = new Uint8Array(binaryString.length)
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i)
-            }
-            const blob = new Blob([bytes], { type: json.file.mimeType })
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = json.file.name
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
-            URL.revokeObjectURL(url)
+            setInvoiceSuccess({
+              fileName: json.file.name,
+              fileData: json.file.data,
+              mimeType: json.file.mimeType
+            })
           }
 
           setInvoiceError(null)
-          setShowInvoiceDialog(false)
           setInvoiceNumber('')
           setInvoiceCarerIds([])
           
@@ -2288,9 +2280,30 @@ export default function CalendarClient() {
           }
         } catch (err) {
           setInvoiceError(err instanceof Error ? err.message : 'Failed to generate invoice.')
+          setInvoiceSuccess(null)
         } finally {
           setInvoiceIsGenerating(false)
         }
+      }
+
+      const handleDownloadInvoice = () => {
+        if (!invoiceSuccess) return
+        
+        const binaryString = atob(invoiceSuccess.fileData)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        const blob = new Blob([bytes], { type: invoiceSuccess.mimeType })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = invoiceSuccess.fileName
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+        setInvoiceSuccess(null)
       }
 
   const handleCopyDayClick = () => {
@@ -2671,6 +2684,34 @@ export default function CalendarClient() {
             {invoiceError && (
               <div className="cal-error-toast" style={{ position: 'relative', top: 0, left: 0, transform: 'none', marginTop: 10 }}>
                 Error: {invoiceError}
+              </div>
+            )}
+
+            {invoiceSuccess && (
+              <div style={{
+                padding: '1rem',
+                backgroundColor: '#065f46',
+                borderRadius: '4px',
+                border: '1px solid #059669',
+                marginTop: '1rem',
+                color: '#d1fae5'
+              }}>
+                <p style={{ margin: '0 0 0.75rem 0', fontWeight: 'bold' }}>✓ Invoice generated successfully!</p>
+                <button
+                  onClick={handleDownloadInvoice}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#10b981',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: '500'
+                  }}
+                >
+                  Download {invoiceSuccess.fileName}
+                </button>
               </div>
             )}
 
