@@ -275,13 +275,16 @@ export async function POST(req: Request) {
 
     const parseTimeToDate = (t: string) => {
       if (!t) return ''
-      // Parse the timestamp and extract local time components
-      const dt = new Date(t)
-      if (Number.isNaN(dt.getTime())) return t
+      // Extract time string from ISO timestamp (e.g., "2025-12-29T03:00:00.000Z" -> "03:00:00")
+      // The time part after T represents UTC time, but we want to display it as-is
+      const timePart = t.includes('T') ? t.split('T')[1]?.split('.')[0] : t.split('.')[0]
+      if (!timePart) return t
       
-      // Create a new date with just the time components in local timezone
-      // Use year 1970 for consistency with Excel's time-only values
-      const localDate = new Date(1970, 0, 1, dt.getHours(), dt.getMinutes(), dt.getSeconds())
+      const [hours, minutes, seconds] = timePart.split(':').map(Number)
+      
+      // Create a date using local constructor (not UTC) so Excel displays the time as-is
+      // This prevents Excel from applying timezone conversion
+      const localDate = new Date(1970, 0, 1, hours || 0, minutes || 0, seconds || 0)
       return localDate
     }
 
