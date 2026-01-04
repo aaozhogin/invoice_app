@@ -1832,9 +1832,15 @@ export default function CalendarClient() {
             cost
           }
 
+          console.log(`📝 Adding to inserts array for ${targetYmd}: ${startTime}-${endTime}`)
+          console.log(`   time_from: ${startDateTime}`)
+          console.log(`   time_to: ${endDateTime}`)
           inserts.push(newInsert)
           targetDayShifts.push(newInsert as any)
         }
+        
+        console.log(`✅ Completed target day ${targetYmd}. Inserts array now has ${inserts.length} items`)
+        console.log(`📋 Current inserts array:`, inserts.map(i => ({ date: i.shift_date, time: `${isoToLocalHhmm(i.time_from)}-${isoToLocalHhmm(i.time_to)}` })))
         
         // Add this day's inserts to the total
         allInserts.push(...inserts)
