@@ -27,6 +27,9 @@ export default function SidebarClient() {
       <Link href="/line-item-codes" className="nav-link">
         Line Item Codes
       </Link>
+      <Link href="/reports" className="nav-link">
+        Reports
+      </Link>
 
       <style jsx>{`
         .sidebar {

@@ -1,0 +1,682 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { getSupabaseClient } from '@/app/lib/supabaseClient'
+
+interface CarerReport {
+  carerId: number
+  carerName: string
+  shiftHours: number
+  totalCost: number
+}
+
+interface LineItemReport {
+  code: string
+  description: string
+  hours: number
+  cost: number
+}
+
+interface LineItemCode {
+  id: string
+  code: string
+  description: string | null
+  category: string | null
+}
+
+interface Shift {
+  id: number
+  carer_id: number
+  time_from: string
+  time_to: string
+  cost: number
+  shift_date: string
+  category?: string | null
+  carers?: { id: number; first_name: string; last_name: string }
+  line_items?: { code: string; description: string | null; category: string | null }
+}
+
+export default function ReportsClient() {
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [carerReports, setCarerReports] = useState<CarerReport[]>([])
+  const [lineItemReports, setLineItemReports] = useState<LineItemReport[]>([])
+  const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [selectedLineItemCode, setSelectedLineItemCode] = useState('')
+  const [hireupMapping, setHireupMapping] = useState('')
+  const [shifts, setShifts] = useState<Shift[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Load dates from localStorage on mount
+  useEffect(() => {
+    const savedDateFrom = localStorage.getItem('reports.dateFrom')
+    const savedDateTo = localStorage.getItem('reports.dateTo')
+    const savedHireupMapping = localStorage.getItem('reports.hireupMapping')
+    
+    if (savedDateFrom) setDateFrom(savedDateFrom)
+    if (savedDateTo) setDateTo(savedDateTo)
+    if (savedHireupMapping) setHireupMapping(savedHireupMapping)
+  }, [])
+
+  // Save dates to localStorage
+  useEffect(() => {
+    if (dateFrom) localStorage.setItem('reports.dateFrom', dateFrom)
+    else localStorage.removeItem('reports.dateFrom')
+  }, [dateFrom])
+
+  useEffect(() => {
+    if (dateTo) localStorage.setItem('reports.dateTo', dateTo)
+    else localStorage.removeItem('reports.dateTo')
+  }, [dateTo])
+
+  useEffect(() => {
+    if (hireupMapping) localStorage.setItem('reports.hireupMapping', hireupMapping)
+    else localStorage.removeItem('reports.hireupMapping')
+  }, [hireupMapping])
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const supabase = getSupabaseClient()
+
+        // Fetch line item codes
+        const { data: codes } = await supabase
+          .from('line_item_codes')
+          .select('*')
+          .order('code')
+        
+        if (codes) setLineItemCodes(codes)
+
+        // Fetch shifts
+        let query = supabase.from('shifts').select('*')
+        
+        if (dateFrom) {
+          query = query.gte('shift_date', dateFrom)
+        }
+        if (dateTo) {
+          query = query.lte('shift_date', dateTo)
+        }
+
+        const { data: shiftsData } = await query
+
+        if (shiftsData) {
+          // Fetch carers for enrichment
+          const { data: carersData } = await supabase.from('carers').select('*')
+          const { data: lineItemsData } = await supabase.from('line_item_codes').select('*')
+
+          const enrichedShifts = shiftsData.map(shift => ({
+            ...shift,
+            carers: carersData?.find(c => c.id === shift.carer_id),
+            line_items: lineItemsData?.find(l => l.id === shift.line_item_code_id)
+          }))
+
+          setShifts(enrichedShifts)
+          calculateReports(enrichedShifts, hireupMapping)
+        }
+      } catch (error) {
+        console.error('Error fetching reports data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [dateFrom, dateTo, hireupMapping])
+
+  const calculateReports = (shiftsData: Shift[], hireupCode: string) => {
+    // Calculate carer reports
+    const carerMap = new Map<number, { hours: number; cost: number; name: string }>()
+
+    shiftsData.forEach(shift => {
+      if (!shift.carers) return
+      
+      const duration = calculateDuration(shift.time_from, shift.time_to)
+      const key = shift.carer_id
+      
+      if (!carerMap.has(key)) {
+        carerMap.set(key, {
+          hours: 0,
+          cost: 0,
+          name: `${shift.carers.first_name} ${shift.carers.last_name}`
+        })
+      }
+      
+      const current = carerMap.get(key)!
+      current.hours += duration
+      current.cost += shift.cost || 0
+    })
+
+    const carerReportArray = Array.from(carerMap.entries()).map(([carerId, data]) => ({
+      carerId,
+      carerName: data.name,
+      shiftHours: Math.round(data.hours * 100) / 100,
+      totalCost: Math.round(data.cost * 100) / 100
+    }))
+
+    setCarerReports(carerReportArray)
+
+    // Calculate line item code reports
+    const lineItemMap = new Map<string, { hours: number; cost: number; description: string }>()
+
+    shiftsData.forEach(shift => {
+      let codeId = shift.line_item_code_id
+      
+      // Map HIREUP to selected code
+      if (shift.category === 'HIREUP' && hireupCode) {
+        codeId = hireupCode
+      }
+
+      if (!codeId) return
+
+      const duration = calculateDuration(shift.time_from, shift.time_to)
+      
+      if (!lineItemMap.has(codeId)) {
+        const lineItem = lineItemCodes.find(l => l.id === codeId)
+        lineItemMap.set(codeId, {
+          hours: 0,
+          cost: 0,
+          description: lineItem?.description || ''
+        })
+      }
+
+      const current = lineItemMap.get(codeId)!
+      current.hours += duration
+      current.cost += shift.cost || 0
+    })
+
+    const lineItemReportArray = Array.from(lineItemMap.entries()).map(([code, data]) => {
+      const lineItem = lineItemCodes.find(l => l.id === code)
+      return {
+        code: lineItem?.code || code,
+        description: data.description,
+        hours: Math.round(data.hours * 100) / 100,
+        cost: Math.round(data.cost * 100) / 100
+      }
+    })
+
+    setLineItemReports(lineItemReportArray)
+  }
+
+  const calculateDuration = (timeFrom: string, timeTo: string): number => {
+    const from = new Date(timeFrom)
+    const to = new Date(timeTo)
+    return (to.getTime() - from.getTime()) / (1000 * 60 * 60)
+  }
+
+  const categories = Array.from(new Set(lineItemCodes.map(l => l.category).filter(Boolean)))
+  const filteredCodes = selectedCategory
+    ? lineItemCodes.filter(l => l.category === selectedCategory)
+    : []
+
+  const carerTotalHours = carerReports.reduce((sum, c) => sum + c.shiftHours, 0)
+  const carerTotalCost = carerReports.reduce((sum, c) => sum + c.totalCost, 0)
+
+  const lineItemTotalHours = lineItemReports.reduce((sum, l) => sum + l.hours, 0)
+  const lineItemTotalCost = lineItemReports.reduce((sum, l) => sum + l.cost, 0)
+
+  const normalizeDateInput = (value: string): string => {
+    if (!value) return ''
+    const [year, month, day] = value.split('-').map(Number)
+    if (!year || !month || !day) return ''
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  return (
+    <div className="reports-container">
+      <h1>Reports</h1>
+
+      {/* Date Range Controls */}
+      <div className="reports-date-range">
+        <label className="reports-field">
+          <span>Date from</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(normalizeDateInput(e.target.value))}
+          />
+        </label>
+        <label className="reports-field">
+          <span>Date to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(normalizeDateInput(e.target.value))}
+          />
+        </label>
+        <button
+          onClick={() => {
+            setDateFrom('')
+            setDateTo('')
+          }}
+          className="reports-btn-clear"
+        >
+          Clear Dates
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="reports-loading">Loading reports...</div>
+      ) : (
+        <>
+          {/* Section 1: Carers */}
+          <section className="reports-section">
+            <h2>Carers Report</h2>
+            
+            <div className="reports-table-wrapper">
+              <table className="reports-table">
+                <thead>
+                  <tr>
+                    <th>Seq</th>
+                    <th>Carer Name</th>
+                    <th>Hours</th>
+                    <th>Total Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carerReports.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center' }}>
+                        No data for selected period
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {carerReports.map((carer, idx) => (
+                        <tr key={carer.carerId}>
+                          <td>{idx + 1}</td>
+                          <td>{carer.carerName}</td>
+                          <td>{carer.shiftHours.toFixed(2)}</td>
+                          <td>${carer.totalCost.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr className="reports-total-row">
+                        <td colSpan={2} style={{ fontWeight: 'bold' }}>
+                          TOTAL
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          {carerTotalHours.toFixed(2)}
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          ${carerTotalCost.toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pie Charts */}
+            <div className="reports-charts">
+              <div className="reports-chart-placeholder">
+                <h3>Carers Time Distribution</h3>
+                <p style={{ color: '#999', fontSize: '12px' }}>
+                  {carerReports.length > 0 ? (
+                    <svg viewBox="0 0 100 100" className="pie-chart">
+                      {carerReports.map((carer, idx) => {
+                        const percentage = (carer.shiftHours / carerTotalHours) * 100
+                        const colors = [
+                          '#3b82f6',
+                          '#ef4444',
+                          '#22c55e',
+                          '#f97316',
+                          '#8b5cf6',
+                          '#ec4899',
+                          '#14b8a6',
+                          '#6366f1'
+                        ]
+                        return (
+                          <text
+                            key={idx}
+                            x={10}
+                            y={15 + idx * 12}
+                            fontSize="11"
+                            fill="#e6eef6"
+                          >
+                            <tspan fill={colors[idx % colors.length]}>●</tspan> {carer.carerName}:{' '}
+                            {percentage.toFixed(1)}%
+                          </text>
+                        )
+                      })}
+                    </svg>
+                  ) : (
+                    'No data'
+                  )}
+                </p>
+              </div>
+
+              <div className="reports-chart-placeholder">
+                <h3>Carers Hours Distribution</h3>
+                <p style={{ color: '#999', fontSize: '12px' }}>
+                  {carerReports.length > 0 ? (
+                    <svg viewBox="0 0 100 100" className="pie-chart">
+                      {carerReports.map((carer, idx) => {
+                        const colors = [
+                          '#3b82f6',
+                          '#ef4444',
+                          '#22c55e',
+                          '#f97316',
+                          '#8b5cf6',
+                          '#ec4899',
+                          '#14b8a6',
+                          '#6366f1'
+                        ]
+                        return (
+                          <text
+                            key={idx}
+                            x={10}
+                            y={15 + idx * 12}
+                            fontSize="11"
+                            fill="#e6eef6"
+                          >
+                            <tspan fill={colors[idx % colors.length]}>●</tspan> {carer.carerName}:{' '}
+                            {carer.shiftHours.toFixed(2)}h
+                          </text>
+                        )
+                      })}
+                    </svg>
+                  ) : (
+                    'No data'
+                  )}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Section 2: Line Item Codes */}
+          <section className="reports-section">
+            <h2>Line Item Codes Report</h2>
+
+            {/* HIREUP Mapping */}
+            <div className="reports-hireup-selector">
+              <label className="reports-field">
+                <span>HIREUP Line Item Code</span>
+                <select
+                  value={selectedCategory || ''}
+                  onChange={(e) => setSelectedCategory(e.target.value || null)}
+                >
+                  <option value="">Select category...</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {selectedCategory && (
+                <label className="reports-field">
+                  <span>Code</span>
+                  <select
+                    value={selectedLineItemCode}
+                    onChange={(e) => setSelectedLineItemCode(e.target.value)}
+                  >
+                    <option value="">Select code...</option>
+                    {filteredCodes.map(code => (
+                      <option key={code.id} value={code.id}>
+                        {code.code} - {code.description}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {selectedLineItemCode && (
+                <button
+                  onClick={() => setHireupMapping(selectedLineItemCode)}
+                  className="reports-btn-apply"
+                >
+                  Apply Mapping
+                </button>
+              )}
+
+              {hireupMapping && (
+                <div className="reports-hireup-status">
+                  Mapped to:{' '}
+                  {lineItemCodes.find(l => l.id === hireupMapping)?.code ||
+                    hireupMapping}
+                </div>
+              )}
+            </div>
+
+            {/* Table */}
+            <div className="reports-table-wrapper">
+              <table className="reports-table">
+                <thead>
+                  <tr>
+                    <th>Seq</th>
+                    <th>Code</th>
+                    <th>Description</th>
+                    <th>Hours</th>
+                    <th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItemReports.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center' }}>
+                        No data for selected period
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {lineItemReports.map((item, idx) => (
+                        <tr key={item.code}>
+                          <td>{idx + 1}</td>
+                          <td>{item.code}</td>
+                          <td>{item.description}</td>
+                          <td>{item.hours.toFixed(2)}</td>
+                          <td>${item.cost.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr className="reports-total-row">
+                        <td colSpan={3} style={{ fontWeight: 'bold' }}>
+                          TOTAL
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          {lineItemTotalHours.toFixed(2)}
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          ${lineItemTotalCost.toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      <style jsx>{`
+        .reports-container {
+          padding: 24px;
+          background: var(--bg);
+          color: var(--text);
+          min-height: 100vh;
+        }
+
+        h1 {
+          margin: 0 0 24px 0;
+          font-size: 2rem;
+        }
+
+        .reports-date-range {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 32px;
+          flex-wrap: wrap;
+          align-items: flex-end;
+        }
+
+        .reports-field {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .reports-field span {
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .reports-field input,
+        .reports-field select {
+          background: var(--surface);
+          color: var(--text);
+          border: 1px solid var(--border);
+          padding: 8px 12px;
+          border-radius: 6px;
+          font-size: 0.95rem;
+          min-width: 160px;
+        }
+
+        .reports-btn-clear,
+        .reports-btn-apply {
+          padding: 8px 16px;
+          background: #3b82f6;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }
+
+        .reports-btn-clear:hover,
+        .reports-btn-apply:hover {
+          background: #2563eb;
+        }
+
+        .reports-section {
+          margin-bottom: 48px;
+          padding: 24px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+        }
+
+        .reports-section h2 {
+          margin: 0 0 20px 0;
+          font-size: 1.3rem;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 12px;
+        }
+
+        .reports-loading {
+          text-align: center;
+          padding: 40px;
+          color: var(--muted);
+          font-size: 1.1rem;
+        }
+
+        .reports-table-wrapper {
+          overflow-x: auto;
+          margin-bottom: 24px;
+        }
+
+        .reports-table {
+          width: 100%;
+          border-collapse: collapse;
+          background: var(--card);
+          border: 1px solid var(--border);
+        }
+
+        .reports-table th {
+          background: var(--border);
+          color: var(--text);
+          padding: 12px;
+          text-align: left;
+          font-weight: 700;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .reports-table td {
+          padding: 12px;
+          border-bottom: 1px solid var(--border);
+          color: var(--text);
+        }
+
+        .reports-table tr:hover {
+          background: rgba(125, 211, 252, 0.05);
+        }
+
+        .reports-total-row {
+          background: rgba(59, 130, 246, 0.1);
+          font-weight: 700;
+        }
+
+        .reports-total-row td {
+          padding: 14px 12px;
+          border-top: 2px solid var(--border);
+        }
+
+        .reports-charts {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          margin-top: 24px;
+        }
+
+        .reports-chart-placeholder {
+          background: var(--card);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 20px;
+          min-height: 300px;
+        }
+
+        .reports-chart-placeholder h3 {
+          margin: 0 0 16px 0;
+          font-size: 1rem;
+          color: var(--text);
+        }
+
+        .pie-chart {
+          width: 100%;
+          max-width: 300px;
+        }
+
+        .reports-hireup-selector {
+          display: flex;
+          gap: 16px;
+          margin-bottom: 24px;
+          flex-wrap: wrap;
+          align-items: flex-end;
+          padding: 16px;
+          background: var(--card);
+          border-radius: 6px;
+        }
+
+        .reports-hireup-status {
+          padding: 8px 12px;
+          background: rgba(34, 197, 94, 0.1);
+          border: 1px solid #22c55e;
+          border-radius: 6px;
+          color: #86efac;
+          font-size: 0.9rem;
+          font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+          .reports-charts {
+            grid-template-columns: 1fr;
+          }
+
+          .reports-date-range {
+            flex-direction: column;
+          }
+
+          .reports-field input,
+          .reports-field select {
+            min-width: 100%;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
