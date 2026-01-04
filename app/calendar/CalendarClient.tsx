@@ -2672,6 +2672,12 @@ export default function CalendarClient() {
   }
 
       const handleOpenInvoiceDialog = () => {
+        // Check if date range is specified
+        if (!dateFrom || !dateTo) {
+          setError('Please specify date range first')
+          return
+        }
+        
         setInvoiceError(null)
         setShowActionsMenu(false)
         setInvoiceDate(toYmdLocal(new Date()))
