@@ -1704,6 +1704,11 @@ export default function CalendarClient() {
         // Merge shifts from target day and previous day (only those that extend into target day)
         const allExistingShifts = [...(currentDayShiftsRes.data || []), ...prevDayShifts]
         
+        console.log(`🎯 Target day ${targetYmd}:`)
+        console.log(`   - Current day shifts: ${currentDayShiftsRes.data?.length || 0}`, currentDayShiftsRes.data)
+        console.log(`   - Previous day shifts extending into target: ${prevDayShifts.length}`, prevDayShifts)
+        console.log(`   - Total existing shifts to check: ${allExistingShifts.length}`, allExistingShifts)
+        
         console.log(`🎯 Target day ${targetYmd} for client ${selectedClientId}: Found ${allExistingShifts.length} existing shifts (${currentDayShiftsRes.data?.length || 0} from ${targetYmd} + ${prevDayShiftsRes.data?.length || 0} from previous day ${prevTargetYmd})`, allExistingShifts)
         
         // Keep original existing shifts separate from shifts being added in this operation
