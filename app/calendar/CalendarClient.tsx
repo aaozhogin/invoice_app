@@ -2152,32 +2152,7 @@ export default function CalendarClient() {
         return
       }
       
-      // Test database connectivity and table existence first
       const supabase = getSupabaseClient()
-      console.log('Testing database connectivity...')
-      
-      // Test line_items table (should exist)
-      const { data: lineItemsTest, error: lineItemsError } = await supabase.from('line_items').select('*').limit(1)
-      console.log('Line items table test:', { lineItemsTest, lineItemsError })
-      
-      // Test shifts table
-      const { data: shiftsTest, error: shiftsError } = await supabase.from('shifts').select('*').limit(1)
-      console.log('Shifts table test:', { shiftsTest, shiftsError })
-      
-      // If shifts table doesn't exist, try other common names
-      if (shiftsError) {
-        console.log('Trying alternative table names...')
-        const { data: shiftTest, error: shiftError } = await supabase.from('shift').select('*').limit(1)
-        console.log('Shift table test:', { shiftTest, shiftError })
-        
-        const { data: workShiftsTest, error: workShiftsError } = await supabase.from('work_shifts').select('*').limit(1)
-        console.log('Work shifts table test:', { workShiftsTest, workShiftsError })
-      }
-      
-      if (shiftsError && shiftsError.message?.includes('does not exist')) {
-        console.error('Shifts table does not exist! Need to create it first.')
-        throw new Error('Shifts table does not exist in database')
-      }
       
       // Require cost for HIREUP
       if (newShift.category === 'HIREUP') {
@@ -2262,15 +2237,6 @@ export default function CalendarClient() {
       
       console.log('Attempting to save shift with data:', shiftData)
       console.log('Line item found:', lineItem)
-      
-      // First, test if we can query the shifts table
-      const { data: testData, error: testError } = await supabase.from('shifts').select('*').limit(1)
-      console.log('Shifts table test query result:', { testData, testError })
-      
-      if (testError) {
-        console.error('Cannot access shifts table:', testError)
-        throw new Error(`Shifts table error: ${testError.message}`)
-      }
       
       // Execute insert or update
       let result
@@ -2709,8 +2675,15 @@ export default function CalendarClient() {
           return
         }
 
-        if (!invoiceNumber.trim()) {
+        const trimmedInvoiceNumber = invoiceNumber.trim()
+        if (!trimmedInvoiceNumber) {
           setInvoiceError('Invoice number is required.')
+          return
+        }
+        
+        // Validate invoice number format (alphanumeric, hyphens, underscores only)
+        if (!/^[a-zA-Z0-9_-]+$/.test(trimmedInvoiceNumber)) {
+          setInvoiceError('Invoice number can only contain letters, numbers, hyphens, and underscores.')
           return
         }
 
