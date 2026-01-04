@@ -159,7 +159,7 @@ export default function ReportsClient() {
     setCarerReports(carerReportArray)
 
     // Calculate line item code reports
-    const lineItemMap = new Map<string, { hours: number; cost: number; description: string }>()
+    const lineItemMap = new Map<string, { hours: number; cost: number; code: string; description: string }>()
 
     shiftsData.forEach(shift => {
       let codeId = shift.line_item_code_id
@@ -172,12 +172,13 @@ export default function ReportsClient() {
       if (!codeId) return
 
       const duration = calculateDuration(shift.time_from, shift.time_to)
+      const lineItem = lineItemCodes.find(l => l.id === codeId)
       
       if (!lineItemMap.has(codeId)) {
-        const lineItem = lineItemCodes.find(l => l.id === codeId)
         lineItemMap.set(codeId, {
           hours: 0,
           cost: 0,
+          code: lineItem?.code || codeId,
           description: lineItem?.description || ''
         })
       }
@@ -187,15 +188,12 @@ export default function ReportsClient() {
       current.cost += shift.cost || 0
     })
 
-    const lineItemReportArray = Array.from(lineItemMap.entries()).map(([code, data]) => {
-      const lineItem = lineItemCodes.find(l => l.id === code)
-      return {
-        code: lineItem?.code || code,
-        description: data.description,
-        hours: Math.round(data.hours * 100) / 100,
-        cost: Math.round(data.cost * 100) / 100
-      }
-    })
+    const lineItemReportArray = Array.from(lineItemMap.entries()).map(([code, data]) => ({
+      code: data.code,
+      description: data.description,
+      hours: Math.round(data.hours * 100) / 100,
+      cost: Math.round(data.cost * 100) / 100
+    }))
 
     setLineItemReports(lineItemReportArray)
   }
@@ -313,75 +311,57 @@ export default function ReportsClient() {
             <div className="reports-charts">
               <div className="reports-chart-placeholder">
                 <h3>Carers Time Distribution</h3>
-                <p style={{ color: '#999', fontSize: '12px' }}>
-                  {carerReports.length > 0 ? (
-                    <svg viewBox="0 0 100 100" className="pie-chart">
-                      {carerReports.map((carer, idx) => {
-                        const percentage = (carer.shiftHours / carerTotalHours) * 100
-                        const colors = [
-                          '#3b82f6',
-                          '#ef4444',
-                          '#22c55e',
-                          '#f97316',
-                          '#8b5cf6',
-                          '#ec4899',
-                          '#14b8a6',
-                          '#6366f1'
-                        ]
-                        return (
-                          <text
-                            key={idx}
-                            x={10}
-                            y={15 + idx * 12}
-                            fontSize="11"
-                            fill="#e6eef6"
-                          >
-                            <tspan fill={colors[idx % colors.length]}>●</tspan> {carer.carerName}:{' '}
-                            {percentage.toFixed(1)}%
-                          </text>
-                        )
-                      })}
-                    </svg>
-                  ) : (
-                    'No data'
-                  )}
-                </p>
+                {carerReports.length > 0 ? (
+                  <div className="reports-chart-legend">
+                    {carerReports.map((carer, idx) => {
+                      const percentage = (carer.shiftHours / carerTotalHours) * 100
+                      const colors = [
+                        '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                        '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                      ]
+                      return (
+                        <div key={idx} className="reports-legend-item">
+                          <span 
+                            className="reports-legend-color" 
+                            style={{ backgroundColor: colors[idx % colors.length] }}
+                          />
+                          <span className="reports-legend-text">
+                            {carer.carerName}: {percentage.toFixed(1)}%
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ color: '#999' }}>No data</p>
+                )}
               </div>
 
               <div className="reports-chart-placeholder">
                 <h3>Carers Hours Distribution</h3>
-                <p style={{ color: '#999', fontSize: '12px' }}>
-                  {carerReports.length > 0 ? (
-                    <svg viewBox="0 0 100 100" className="pie-chart">
-                      {carerReports.map((carer, idx) => {
-                        const colors = [
-                          '#3b82f6',
-                          '#ef4444',
-                          '#22c55e',
-                          '#f97316',
-                          '#8b5cf6',
-                          '#ec4899',
-                          '#14b8a6',
-                          '#6366f1'
-                        ]
-                        return (
-                          <text
-                            key={idx}
-                            x={10}
-                            y={15 + idx * 12}
-                            fontSize="11"
-                            fill="#e6eef6"
-                          >
-                            <tspan fill={colors[idx % colors.length]}>●</tspan> {carer.carerName}:{' '}
-                            {carer.shiftHours.toFixed(2)}h
-                          </text>
-                        )
-                      })}
-                    </svg>
-                  ) : (
-                    'No data'
-                  )}
-                </p>
+                {carerReports.length > 0 ? (
+                  <div className="reports-chart-legend">
+                    {carerReports.map((carer, idx) => {
+                      const colors = [
+                        '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                        '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                      ]
+                      return (
+                        <div key={idx} className="reports-legend-item">
+                          <span 
+                            className="reports-legend-color" 
+                            style={{ backgroundColor: colors[idx % colors.length] }}
+                          />
+                          <span className="reports-legend-text">
+                            {carer.carerName}: {carer.shiftHours.toFixed(2)}h
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p style={{ color: '#999' }}>No data</p>
+                )}
               </div>
             </div>
           </section>
@@ -396,7 +376,11 @@ export default function ReportsClient() {
                 <span>HIREUP Line Item Code</span>
                 <select
                   value={selectedCategory || ''}
-                  onChange={(e) => setSelectedCategory(e.target.value || null)}
+                  onChange={(e) => {
+                    const val = e.target.value || null
+                    setSelectedCategory(val)
+                    setSelectedLineItemCode('')
+                  }}
                 >
                   <option value="">Select category...</option>
                   {categories.map(cat => (
@@ -407,7 +391,7 @@ export default function ReportsClient() {
                 </select>
               </label>
 
-              {selectedCategory && (
+              {selectedCategory && filteredCodes.length > 0 && (
                 <label className="reports-field">
                   <span>Code</span>
                   <select
@@ -417,14 +401,14 @@ export default function ReportsClient() {
                     <option value="">Select code...</option>
                     {filteredCodes.map(code => (
                       <option key={code.id} value={code.id}>
-                        {code.code} - {code.description}
+                        {code.code} - {code.description || 'No description'}
                       </option>
                     ))}
                   </select>
                 </label>
               )}
 
-              {selectedLineItemCode && (
+              {selectedLineItemCode && filteredCodes.find(c => c.id === selectedLineItemCode) && (
                 <button
                   onClick={() => setHireupMapping(selectedLineItemCode)}
                   className="reports-btn-apply"
@@ -634,6 +618,34 @@ export default function ReportsClient() {
           margin: 0 0 16px 0;
           font-size: 1rem;
           color: var(--text);
+        }
+
+        .reports-chart-legend {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .reports-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 4px;
+        }
+
+        .reports-legend-color {
+          width: 16px;
+          height: 16px;
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+
+        .reports-legend-text {
+          color: var(--text);
+          font-size: 0.95rem;
+          word-break: break-word;
         }
 
         .pie-chart {
