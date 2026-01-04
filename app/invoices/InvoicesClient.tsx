@@ -94,7 +94,7 @@ export default function InvoicesClient() {
         </p>
       </div>
 
-      {error && invoices.length === 0 && (
+      {error && invoices.length > 0 && (
         <div style={{
           padding: '1rem',
           backgroundColor: '#7f1d1d',
