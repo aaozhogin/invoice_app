@@ -3310,7 +3310,7 @@ export default function CalendarClient() {
               </button>
               <button
                 onClick={handleGenerateInvoice}
-                disabled={invoiceIsGenerating || ((invoiceCarerOptions.length || carersWithShiftsInRange.length) === 0)}
+                disabled={invoiceIsGenerating || !dateFrom || !dateTo || ((invoiceCarerOptions.length || carersWithShiftsInRange.length) === 0)}
               >
                 {invoiceIsGenerating ? 'Generating…' : 'Generate'}
               </button>
