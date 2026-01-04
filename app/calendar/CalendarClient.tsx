@@ -749,6 +749,25 @@ export default function CalendarClient() {
       .sort((a, b) => a.carer.first_name.localeCompare(b.carer.first_name))
   }, [rangeShifts, carers])
 
+  // Debug logging for week view
+  useEffect(() => {
+    if (viewMode === 'week') {
+      console.log('🔍 Week view data:', {
+        rangeShiftsCount: rangeShifts.length,
+        currentDate: toYmdLocal(currentDate),
+        mondayDate: toYmdLocal(getMonday(currentDate)),
+        sundayDate: toYmdLocal(getSunday(currentDate)),
+        sampleShifts: rangeShifts.slice(0, 3).map(s => ({
+          id: s.id,
+          shift_date: s.shift_date,
+          time_from: s.time_from,
+          time_to: s.time_to,
+          carer: s.carers?.first_name
+        }))
+      })
+    }
+  }, [viewMode, rangeShifts, currentDate])
+
   const isoToLocalHhmm = (iso: string): string => {
     const dt = new Date(iso)
     if (isNaN(dt.getTime())) return '00:00'
