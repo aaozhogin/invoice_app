@@ -2406,6 +2406,33 @@ export default function CalendarClient() {
 
       const shiftDate = shift.shift_date
       
+      // Validate same carer overlap
+      const hasCarerOverlap = checkCarerOverlap(
+        shift.carer_id,
+        newStartTime,
+        newEndTime,
+        shiftDate,
+        shiftId // Exclude the current shift being edited
+      )
+      
+      if (hasCarerOverlap) {
+        setError('This carer already has a shift that overlaps with the selected time. Carers can only have one shift at a time.')
+        return
+      }
+
+      // Validate triple overlap
+      const hasTripleOverlap = checkTripleOverlap(
+        newStartTime,
+        newEndTime,
+        shiftDate,
+        shiftId // Exclude the current shift being edited
+      )
+
+      if (hasTripleOverlap) {
+        setError('This shift would cause 3 or more shifts to overlap. Maximum 2 overlapping shifts allowed.')
+        return
+      }
+      
       // Handle overnight shifts
       const startMinutes = timeStringToMinutes(newStartTime)
       const endMinutes = timeStringToMinutes(newEndTime)
