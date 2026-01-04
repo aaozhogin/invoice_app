@@ -723,8 +723,11 @@ export default function CalendarClient() {
 
   const carersWithShiftsInRange = useMemo(() => {
     const counts = new Map<number, number>()
+    // Filter out HIREUP shifts when counting carer shifts
     for (const shift of rangeShifts) {
-      counts.set(shift.carer_id, (counts.get(shift.carer_id) || 0) + 1)
+      if (shift.category !== 'HIREUP') {
+        counts.set(shift.carer_id, (counts.get(shift.carer_id) || 0) + 1)
+      }
     }
 
     return carers
@@ -752,6 +755,7 @@ export default function CalendarClient() {
         .select('carer_id')
         .gte('shift_date', rangeFrom)
         .lte('shift_date', rangeTo)
+        .neq('category', 'HIREUP')
 
       if (selectedClientId) {
         query = query.eq('client_id', selectedClientId)
