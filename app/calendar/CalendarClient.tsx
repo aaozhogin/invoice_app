@@ -5294,10 +5294,12 @@ export default function CalendarClient() {
           padding-right: 8px;
           display: flex;
           flex-direction: column;
+          height: 100%;
         }
 
         .cal-week-hour-label {
           flex: 1;
+          min-height: 0;
           display: flex;
           align-items: center;
           justify-content: flex-end;
@@ -5337,6 +5339,7 @@ export default function CalendarClient() {
 
         .cal-week-timeline-area {
           flex: 1;
+          min-height: 0;
           position: relative;
           background-color: var(--surface);
           border-right: 1px solid var(--border);
