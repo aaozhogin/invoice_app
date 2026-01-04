@@ -3285,7 +3285,7 @@ export default function CalendarClient() {
                 }}
                 disabled={invoiceIsGenerating}
               >
-                Cancel
+                Close
               </button>
               <button
                 onClick={handleGenerateInvoice}
