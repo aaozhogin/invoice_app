@@ -556,24 +556,38 @@ export async function POST(req: Request) {
       // Use any to bypass type checking issues with invoices table
       const supabase: any = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
       
-      const { data, error: invoiceError } = await supabase
+      // Check if invoice already exists
+      const { data: existingInvoice } = await supabase
         .from('invoices')
-        .insert({
-          invoice_number: invoiceNumber,
-          carer_id: carerIds[0],
-          client_id: clientId,
-          date_from: dateFrom,
-          date_to: dateTo,
-          invoice_date: invoiceDate,
-          file_name: filename,
-          file_path: `/api/download-invoice?number=${invoiceNumber}&date=${invoiceDate}`
-        })
-        .select()
+        .select('*')
+        .eq('invoice_number', invoiceNumber)
+        .eq('invoice_date', invoiceDate)
+        .limit(1)
+      
+      // Only insert if it doesn't already exist
+      if (!existingInvoice || existingInvoice.length === 0) {
+        const { data, error: invoiceError } = await supabase
+          .from('invoices')
+          .insert({
+            invoice_number: invoiceNumber,
+            carer_id: carerIds[0],
+            client_id: clientId,
+            date_from: dateFrom,
+            date_to: dateTo,
+            invoice_date: invoiceDate,
+            file_name: filename,
+            file_path: `/api/download-invoice?number=${invoiceNumber}&date=${invoiceDate}`
+          })
+          .select()
 
-      if (invoiceError) {
-        console.warn('Failed to save invoice record:', invoiceError)
+        if (invoiceError) {
+          console.warn('Failed to save invoice record:', invoiceError)
+        } else {
+          invoiceRecord = data?.[0]
+        }
       } else {
-        invoiceRecord = data?.[0]
+        // Invoice already exists, use existing record
+        invoiceRecord = existingInvoice[0]
       }
     } catch (err) {
       console.warn('Error saving invoice record:', err)
