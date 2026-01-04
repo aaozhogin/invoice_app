@@ -2888,8 +2888,8 @@ export default function CalendarClient() {
                           key={shift.id}
                           className="cal-week-shift-block"
                           style={{
-                            top: startMinutes,
-                            height: displayHeight,
+                            top: `${startMinutes}px`,
+                            height: `${displayHeight}px`,
                             left: `${shiftLeft}%`,
                             width: `${shiftWidth}%`,
                             backgroundColor: shift.carers?.color || '#3b82f6',
@@ -4074,6 +4074,8 @@ export default function CalendarClient() {
           transition: opacity 0.2s;
           font-size: 0.80em;
           line-height: 1.2;
+          box-sizing: border-box;
+          z-index: 5;
         }
 
         .cal-week-shift-block:hover {
