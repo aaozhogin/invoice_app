@@ -122,6 +122,7 @@ export default function CalendarClient() {
   const [copyWeekSelected, setCopyWeekSelected] = useState<string[]>([])
   const [copyWeekIsWorking, setCopyWeekIsWorking] = useState(false)
   const [copyWeekError, setCopyWeekError] = useState<string | null>(null)
+  const [deleteAllShiftsDateConfirm, setDeleteAllShiftsDateConfirm] = useState<string | null>(null)
   const [showCopyShiftDialog, setShowCopyShiftDialog] = useState(false)
   const [copyShiftSelected, setCopyShiftSelected] = useState<string[]>([])
   const [copyShiftIsWorking, setCopyShiftIsWorking] = useState(false)
@@ -3043,6 +3044,21 @@ export default function CalendarClient() {
     setShowCopyWeekDialog(true)
   }
 
+  const handleDeleteAllShiftsForDay = async (dayYmd: string) => {
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.from('shifts').delete().eq('shift_date', dayYmd).eq('client_id', selectedClientId)
+      
+      if (error) throw error
+      
+      setDeleteAllShiftsDateConfirm(null)
+      await fetchData()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete shifts'
+      setError(msg)
+    }
+  }
+
   const hours = Array.from({ length: 24 }, (_, i) => {
     const hour = i
     if (hour === 0) return '12 AM'
@@ -3654,6 +3670,33 @@ export default function CalendarClient() {
         </div>
       )}
 
+      {deleteAllShiftsDateConfirm && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-dialog" style={{ maxWidth: '400px' }}>
+            <h3>Delete all shifts?</h3>
+            <div style={{ marginBottom: 16, color: '#374151', fontSize: 14 }}>
+              Are you sure? This operation will delete all shifts for <strong>{parseYmdToLocalDate(deleteAllShiftsDateConfirm).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</strong>.
+            </div>
+            <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16 }}>
+              This action cannot be undone.
+            </div>
+            <div className="cal-dialog-buttons">
+              <button
+                onClick={() => setDeleteAllShiftsDateConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteAllShiftsForDay(deleteAllShiftsDateConfirm)}
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                Yes, Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error toast - appears on top of everything */}
       {error && !showShiftDialog && (
         <div className="cal-error-toast" onClick={() => setError(null)} style={{ cursor: 'pointer' }}>
@@ -3691,8 +3734,30 @@ export default function CalendarClient() {
               
               return (
                 <div key={dayYmd} className="cal-week-day-timeline">
-                  <div className="cal-week-day-header">
-                    {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  <div className="cal-week-day-header" style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>
+                      {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </span>
+                    <button
+                      onClick={() => setDeleteAllShiftsDateConfirm(dayYmd)}
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '0.75em',
+                        backgroundColor: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        opacity: 0,
+                        transition: 'opacity 0.2s',
+                        marginRight: '4px'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
+                      title="Delete all shifts for this day"
+                    >
+                      Delete all
+                    </button>
                   </div>
                   
                   <div 
