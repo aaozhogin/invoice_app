@@ -37,6 +37,15 @@ export default function CarersClient() {
   const [formVisible, setFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    isOpen: boolean
+    carer: Carer | null
+    associatedShifts: any[]
+  }>({
+    isOpen: false,
+    carer: null,
+    associatedShifts: []
+  });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [form, setForm] = useState<CarerForm>({
@@ -297,16 +306,69 @@ export default function CarersClient() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this carer?')) return;
+    // Fetch associated shifts
+    const { data: shifts, error: shiftsError } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('carer_id', id);
 
-    const { error } = await supabase.from('carers').delete().eq('id', id);
-    if (error) {
-      console.error('Delete error:', error);
-      alert('Delete failed: ' + error.message);
+    if (shiftsError) {
+      console.error('Error fetching shifts:', shiftsError);
+      alert('Failed to check for associated shifts');
       return;
     }
 
-    setCarers(prev => prev.filter(carer => carer.id !== id));
+    const carer = carers.find(c => c.id === id);
+    if (!carer) return;
+
+    // Show delete confirmation dialog
+    setDeleteConfirmDialog({
+      isOpen: true,
+      carer,
+      associatedShifts: shifts || []
+    });
+  };
+
+  const handleConfirmDelete = async (id: number) => {
+    try {
+      // Delete all associated shifts first
+      const { error: shiftsError } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('carer_id', id);
+
+      if (shiftsError) {
+        console.error('Error deleting shifts:', shiftsError);
+        alert('Failed to delete associated shifts');
+        return;
+      }
+
+      // Then delete the carer
+      const { error: carerError } = await supabase
+        .from('carers')
+        .delete()
+        .eq('id', id);
+
+      if (carerError) {
+        console.error('Error deleting carer:', carerError);
+        alert('Failed to delete carer');
+        return;
+      }
+
+      // Update UI
+      setCarers(prev => prev.filter(carer => carer.id !== id));
+      setDeleteConfirmDialog({
+        isOpen: false,
+        carer: null,
+        associatedShifts: []
+      });
+
+      // Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent('shiftsDeleted'));
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Delete failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   // Drag and drop functions
@@ -780,6 +842,143 @@ export default function CarersClient() {
           border: 3px solid #000 !important;
         }
         `}</style>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmDialog.isOpen && deleteConfirmDialog.carer && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <h2>Delete Carer: {deleteConfirmDialog.carer.first_name} {deleteConfirmDialog.carer.last_name}</h2>
+            
+            {deleteConfirmDialog.associatedShifts.length > 0 ? (
+              <div>
+                <p>This carer has {deleteConfirmDialog.associatedShifts.length} associated shift(s):</p>
+                <div className="shifts-list">
+                  {deleteConfirmDialog.associatedShifts.map((shift: any) => (
+                    <div key={shift.id} className="shift-item">
+                      <span>{new Date(shift.date_from).toLocaleDateString()} - {shift.shift_type || 'No type'}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="warning-text">If you proceed, this carer and all associated shifts will be permanently deleted.</p>
+              </div>
+            ) : (
+              <p>This carer has no associated shifts.</p>
+            )}
+            
+            <div className="modal-buttons">
+              <button 
+                onClick={() => setDeleteConfirmDialog({ isOpen: false, carer: null, associatedShifts: [] })}
+                className="btn-cancel"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleConfirmDelete(deleteConfirmDialog.carer!.id)}
+                className="btn-delete"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .modal-dialog {
+          background: var(--surface);
+          border-radius: 8px;
+          padding: 24px;
+          max-width: 500px;
+          width: 90%;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+
+        .modal-dialog h2 {
+          margin-top: 0;
+          margin-bottom: 16px;
+          color: var(--text);
+        }
+
+        .modal-dialog p {
+          margin: 12px 0;
+          color: var(--text-secondary);
+          font-size: 0.95em;
+        }
+
+        .warning-text {
+          color: #ef4444 !important;
+          font-weight: 500;
+        }
+
+        .shifts-list {
+          background-color: var(--surface-accent);
+          border-radius: 4px;
+          padding: 12px;
+          margin: 12px 0;
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .shift-item {
+          padding: 8px;
+          border-bottom: 1px solid var(--border);
+          font-size: 0.9em;
+          color: var(--text);
+        }
+
+        .shift-item:last-child {
+          border-bottom: none;
+        }
+
+        .modal-buttons {
+          display: flex;
+          gap: 12px;
+          justify-content: flex-end;
+          margin-top: 24px;
+        }
+
+        .btn-cancel, .btn-delete {
+          padding: 8px 16px;
+          border-radius: 4px;
+          border: none;
+          cursor: pointer;
+          font-size: 0.9em;
+          font-weight: 500;
+        }
+
+        .btn-cancel {
+          background-color: var(--surface-accent);
+          color: var(--text);
+        }
+
+        .btn-cancel:hover {
+          background-color: var(--border);
+        }
+
+        .btn-delete {
+          background-color: #ef4444;
+          color: white;
+        }
+
+        .btn-delete:hover {
+          background-color: #dc2626;
+        }
+      `}</style>
     </div>
   );
 }

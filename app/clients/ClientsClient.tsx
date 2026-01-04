@@ -28,6 +28,15 @@ export default function ClientsClient() {
   const [formVisible, setFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    isOpen: boolean
+    client: Client | null
+    associatedShifts: any[]
+  }>({
+    isOpen: false,
+    client: null,
+    associatedShifts: []
+  });
 
   const [form, setForm] = useState<ClientForm>({
     firstName: '',
@@ -161,16 +170,69 @@ export default function ClientsClient() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this client?')) return;
+    // Fetch associated shifts
+    const { data: shifts, error: shiftsError } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('client_id', id);
 
-    const { error } = await supabase.from('clients').delete().eq('id', id);
-    if (error) {
-      console.error('Delete error:', error);
-      alert('Delete failed: ' + error.message);
+    if (shiftsError) {
+      console.error('Error fetching shifts:', shiftsError);
+      alert('Failed to check for associated shifts');
       return;
     }
 
-    setClients(prev => prev.filter(client => client.id !== id));
+    const client = clients.find(c => c.id === id);
+    if (!client) return;
+
+    // Show delete confirmation dialog
+    setDeleteConfirmDialog({
+      isOpen: true,
+      client,
+      associatedShifts: shifts || []
+    });
+  };
+
+  const handleConfirmDelete = async (id: number) => {
+    try {
+      // Delete all associated shifts first
+      const { error: shiftsError } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('client_id', id);
+
+      if (shiftsError) {
+        console.error('Error deleting shifts:', shiftsError);
+        alert('Failed to delete associated shifts');
+        return;
+      }
+
+      // Then delete the client
+      const { error: clientError } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', id);
+
+      if (clientError) {
+        console.error('Error deleting client:', clientError);
+        alert('Failed to delete client');
+        return;
+      }
+
+      // Update UI
+      setClients(prev => prev.filter(client => client.id !== id));
+      setDeleteConfirmDialog({
+        isOpen: false,
+        client: null,
+        associatedShifts: []
+      });
+
+      // Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent('shiftsDeleted'));
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Delete failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   const handleCancel = () => {
@@ -404,6 +466,143 @@ export default function ClientsClient() {
             grid-template-columns: 30px 1fr 0.8fr 1.5fr 80px;
             font-size: 0.8em;
           }
+        }
+      `}</style>
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmDialog.isOpen && deleteConfirmDialog.client && (
+        <div className="modal-overlay">
+          <div className="modal-dialog">
+            <h2>Delete Client: {deleteConfirmDialog.client.first_name} {deleteConfirmDialog.client.last_name}</h2>
+            
+            {deleteConfirmDialog.associatedShifts.length > 0 ? (
+              <div>
+                <p>This client has {deleteConfirmDialog.associatedShifts.length} associated shift(s):</p>
+                <div className="shifts-list">
+                  {deleteConfirmDialog.associatedShifts.map((shift: any) => (
+                    <div key={shift.id} className="shift-item">
+                      <span>{new Date(shift.date_from).toLocaleDateString()} - {shift.shift_type || 'No type'}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="warning-text">If you proceed, this client and all associated shifts will be permanently deleted.</p>
+              </div>
+            ) : (
+              <p>This client has no associated shifts.</p>
+            )}
+            
+            <div className="modal-buttons">
+              <button 
+                onClick={() => setDeleteConfirmDialog({ isOpen: false, client: null, associatedShifts: [] })}
+                className="btn-cancel"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleConfirmDelete(deleteConfirmDialog.client!.id!)}
+                className="btn-delete"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .modal-dialog {
+          background: var(--surface);
+          border-radius: 8px;
+          padding: 24px;
+          max-width: 500px;
+          width: 90%;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+
+        .modal-dialog h2 {
+          margin-top: 0;
+          margin-bottom: 16px;
+          color: var(--text);
+        }
+
+        .modal-dialog p {
+          margin: 12px 0;
+          color: var(--text-secondary);
+          font-size: 0.95em;
+        }
+
+        .warning-text {
+          color: #ef4444 !important;
+          font-weight: 500;
+        }
+
+        .shifts-list {
+          background-color: var(--surface-accent);
+          border-radius: 4px;
+          padding: 12px;
+          margin: 12px 0;
+          max-height: 300px;
+          overflow-y: auto;
+        }
+
+        .shift-item {
+          padding: 8px;
+          border-bottom: 1px solid var(--border);
+          font-size: 0.9em;
+          color: var(--text);
+        }
+
+        .shift-item:last-child {
+          border-bottom: none;
+        }
+
+        .modal-buttons {
+          display: flex;
+          gap: 12px;
+          justify-content: flex-end;
+          margin-top: 24px;
+        }
+
+        .btn-cancel, .btn-delete {
+          padding: 8px 16px;
+          border-radius: 4px;
+          border: none;
+          cursor: pointer;
+          font-size: 0.9em;
+          font-weight: 500;
+        }
+
+        .btn-cancel {
+          background-color: var(--surface-accent);
+          color: var(--text);
+        }
+
+        .btn-cancel:hover {
+          background-color: var(--border);
+        }
+
+        .btn-delete {
+          background-color: #ef4444;
+          color: white;
+        }
+
+        .btn-delete:hover {
+          background-color: #dc2626;
         }
       `}</style>
     </div>
