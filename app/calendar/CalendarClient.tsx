@@ -2792,58 +2792,82 @@ export default function CalendarClient() {
       )}
 
       {viewMode === 'week' ? (
-        // Week View
-        <div className="cal-week-container">
-          {Array.from({ length: 7 }, (_, i) => {
-            const dayDate = new Date(getMonday(currentDate));
-            dayDate.setDate(dayDate.getDate() + i);
-            const dayYmd = toYmdLocal(dayDate);
-            const dayShifts = rangeShifts
-              .filter(s => s.shift_date === dayYmd)
-              .sort((a, b) => a.time_from.localeCompare(b.time_from));
-            
-            return (
-              <div key={dayYmd} className="cal-week-day">
-                <div className="cal-week-day-header">
-                  {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                </div>
-                <div className="cal-week-day-shifts">
-                  {dayShifts.length > 0 ? (
-                    dayShifts.map(shift => (
-                      <div 
-                        key={shift.id} 
-                        className="cal-week-shift-card"
-                        style={{
-                          borderLeftColor: shift.carers?.color || '#999',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => {
-                          setEditingShift(shift);
-                          setShowShiftDialog(true);
-                        }}
-                      >
-                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                          {new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })} - {new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                        <div style={{ marginBottom: '4px' }}>{shift.carers?.first_name} {shift.carers?.last_name}</div>
-                        {shift.clients && <div style={{ fontSize: '0.85em', opacity: 0.9, marginBottom: '4px' }}>{shift.clients.first_name}</div>}
-                        {shift.line_items && <div style={{ fontSize: '0.8em', opacity: 0.75, marginBottom: '4px' }}>{shift.line_items.code} - {shift.line_items.description}</div>}
-                        <div style={{ fontSize: '0.85em', color: '#2563eb', marginBottom: '4px' }}>${(shift.cost || 0).toFixed(2)}</div>
-                        {(shift.category || shift.line_items?.sleepover || shift.line_items?.public_holiday) && (
-                          <div style={{ fontSize: '0.75em', opacity: 0.8, display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                            {shift.line_items?.sleepover && <span style={{ backgroundColor: '#fef3c7', padding: '2px 4px', borderRadius: '2px', color: '#000' }}>Sleepover</span>}
-                            {shift.line_items?.public_holiday && <span style={{ backgroundColor: '#fecaca', padding: '2px 4px', borderRadius: '2px', color: '#000' }}>Holiday</span>}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="cal-week-no-shifts">No shifts</div>
-                  )}
-                </div>
+        // Week View with Timeline
+        <div className="cal-week-view">
+          <div className="cal-week-hours-column">
+            {hours.map((hour, index) => (
+              <div key={index} className="cal-week-hour-label">
+                {hour}
               </div>
-            );
-          })}
+            ))}
+          </div>
+          
+          <div className="cal-week-timeline-container">
+            {Array.from({ length: 7 }, (_, i) => {
+              const dayDate = new Date(getMonday(currentDate));
+              dayDate.setDate(dayDate.getDate() + i);
+              const dayYmd = toYmdLocal(dayDate);
+              const dayShifts = rangeShifts
+                .filter(s => s.shift_date === dayYmd)
+                .sort((a, b) => a.time_from.localeCompare(b.time_from));
+              
+              return (
+                <div key={dayYmd} className="cal-week-day-timeline">
+                  <div className="cal-week-day-header">
+                    {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </div>
+                  
+                  <div className="cal-week-timeline-area">
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <div key={i} className="cal-week-hour-line" style={{ top: i * HOUR_HEIGHT }} />
+                    ))}
+                    
+                    {dayShifts.map(shift => {
+                      const startTime = new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                      const endTime = new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                      const startMinutes = timeStringToMinutes(startTime);
+                      const endMinutes = timeStringToMinutes(endTime);
+                      const isOvernight = endMinutes < startMinutes;
+                      const duration = isOvernight ? (24 * 60 - startMinutes + endMinutes) : (endMinutes - startMinutes);
+                      
+                      return (
+                        <div
+                          key={shift.id}
+                          className="cal-week-shift-block"
+                          style={{
+                            top: startMinutes,
+                            height: Math.max(duration * (HOUR_HEIGHT / 60), 60),
+                            backgroundColor: shift.carers?.color || '#3b82f6',
+                            borderLeftColor: shift.carers?.color || '#3b82f6'
+                          }}
+                          onClick={() => {
+                            setEditingShift(shift);
+                            setShowShiftDialog(true);
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: '0.9em', marginBottom: '4px' }}>
+                            {startTime} - {endTime}
+                          </div>
+                          <div style={{ fontSize: '0.85em', marginBottom: '2px' }}>
+                            {shift.carers?.first_name} {shift.carers?.last_name}
+                          </div>
+                          {shift.clients && <div style={{ fontSize: '0.8em', opacity: 0.9, marginBottom: '2px' }}>{shift.clients.first_name}</div>}
+                          {shift.line_items && <div style={{ fontSize: '0.75em', opacity: 0.85, marginBottom: '2px' }}>{shift.line_items.code}</div>}
+                          <div style={{ fontSize: '0.8em', marginBottom: '2px' }}>${(shift.cost || 0).toFixed(2)}</div>
+                          {(shift.line_items?.sleepover || shift.line_items?.public_holiday) && (
+                            <div style={{ fontSize: '0.7em', display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+                              {shift.line_items?.sleepover && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '1px 3px', borderRadius: '2px' }}>S</span>}
+                              {shift.line_items?.public_holiday && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '1px 3px', borderRadius: '2px' }}>H</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : (
         // Day View
@@ -3897,7 +3921,6 @@ export default function CalendarClient() {
           cursor: pointer;
           font-size: 14px;
           transition: background-color 0.2s;
-          font-weight: 500;
         }
 
         .view-toggle-btn:hover {
@@ -3912,59 +3935,88 @@ export default function CalendarClient() {
           padding-bottom: 20px;
         }
 
-        .cal-week-day {
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          padding: 12px;
-          background-color: var(--surface);
-          min-height: 400px;
+        .cal-week-view {
+          display: flex;
+          gap: 0;
+          overflow-x: auto;
+          height: calc(100vh - 300px);
+        }
+
+        .cal-week-hours-column {
+          width: 80px;
+          flex-shrink: 0;
+          border-right: 1px solid var(--border);
+          padding-right: 8px;
+        }
+
+        .cal-week-hour-label {
+          height: ${HOUR_HEIGHT}px;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          padding-right: 4px;
+          font-size: 0.85em;
+          color: var(--text-secondary);
+          font-weight: 500;
+        }
+
+        .cal-week-timeline-container {
+          display: flex;
+          gap: 1px;
+          flex: 1;
+          background-color: var(--border);
+          padding: 0;
+        }
+
+        .cal-week-day-timeline {
+          flex: 1;
+          min-width: 150px;
           display: flex;
           flex-direction: column;
+          background-color: var(--surface);
         }
 
         .cal-week-day-header {
           font-weight: 600;
           text-align: center;
-          padding-bottom: 12px;
+          padding: 12px 8px;
           border-bottom: 2px solid var(--border);
-          margin-bottom: 12px;
           color: var(--text);
+          flex-shrink: 0;
         }
 
-        .cal-week-day-shifts {
+        .cal-week-timeline-area {
           flex: 1;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
+          position: relative;
+          height: 1440px;
+          background-color: var(--surface);
         }
 
-        .cal-week-shift-card {
-          background-color: var(--surface-accent);
-          border-left: 4px solid;
-          padding: 10px;
+        .cal-week-hour-line {
+          position: absolute;
+          width: 100%;
+          height: 1px;
+          background-color: var(--border);
+          left: 0;
+        }
+
+        .cal-week-shift-block {
+          position: absolute;
+          left: 4px;
+          right: 4px;
+          padding: 6px;
           border-radius: 4px;
+          border-left: 4px solid;
+          background-color: #3b82f6;
+          color: white;
+          cursor: pointer;
+          overflow: hidden;
+          transition: opacity 0.2s;
           font-size: 0.85em;
-          color: var(--text);
-          overflow: visible;
-          white-space: normal;
-          word-break: break-word;
-          min-height: 120px;
-          display: flex;
-          flex-direction: column;
-          transition: background-color 0.2s;
         }
 
-        .cal-week-shift-card:hover {
-          background-color: var(--surface-hover);
-        }
-
-        .cal-week-no-shifts {
-          color: var(--text-secondary);
-          font-size: 0.9em;
-          text-align: center;
-          margin-top: auto;
-          margin-bottom: auto;
+        .cal-week-shift-block:hover {
+          opacity: 0.9;
         }
 
         .cal-button-group {
