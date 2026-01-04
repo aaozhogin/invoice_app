@@ -36,10 +36,9 @@ export async function GET(req: Request) {
     const invoice = invoices[0] as Database['public']['Tables']['invoices']['Row']
 
     // Regenerate the invoice by calling the generate-invoice endpoint internally
-    // This ensures we get the same format as originally generated
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-    const host = process.env.VERCEL_URL || process.env.NEXTAUTH_URL || 'localhost:3000'
-    const baseUrl = `${protocol}://${host}`
+    // Get the base URL for the current request
+    const requestUrl = new URL(req.url)
+    const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
     
     const generateRes = await fetch(`${baseUrl}/api/generate-invoice`, {
       method: 'POST',
