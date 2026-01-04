@@ -116,6 +116,13 @@ export default function CalendarClient() {
   const [copyDaySelected, setCopyDaySelected] = useState<string[]>([])
   const [copyDayIsWorking, setCopyDayIsWorking] = useState(false)
   const [copyDayError, setCopyDayError] = useState<string | null>(null)
+  const [showInvoiceDialog, setShowInvoiceDialog] = useState(false)
+  const [invoiceDate, setInvoiceDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [invoiceCarerIds, setInvoiceCarerIds] = useState<number[]>([])
+  const [invoiceCarerOptions, setInvoiceCarerOptions] = useState<{ carer: Carer; count: number }[]>([])
+  const [invoiceError, setInvoiceError] = useState<string | null>(null)
+  const [invoiceIsGenerating, setInvoiceIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [carers, setCarers] = useState<Carer[]>([])
   const [lineItemCodes, setLineItemCodes] = useState<LineItemCode[]>([])
@@ -165,6 +172,18 @@ export default function CalendarClient() {
   })
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+
+  // Time conversion utilities (defined early for use in effects)
+  const timeStringToMinutes = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    return hours * 60 + minutes
+  }
+  
+  const minutesToTimeString = (totalMinutes: number) => {
+    const hours = Math.floor(totalMinutes / 60) % 24
+    const minutes = totalMinutes % 60
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+  }
 
   useEffect(() => {
     fetchData()
@@ -702,10 +721,63 @@ export default function CalendarClient() {
     return days
   }
 
+  const carersWithShiftsInRange = useMemo(() => {
+    const counts = new Map<number, number>()
+    for (const shift of rangeShifts) {
+      counts.set(shift.carer_id, (counts.get(shift.carer_id) || 0) + 1)
+    }
+
+    return carers
+      .filter(c => counts.has(c.id))
+      .map(c => ({ carer: c, count: counts.get(c.id) || 0 }))
+      .sort((a, b) => a.carer.first_name.localeCompare(b.carer.first_name))
+  }, [rangeShifts, carers])
+
   const isoToLocalHhmm = (iso: string): string => {
     const dt = new Date(iso)
     if (isNaN(dt.getTime())) return '00:00'
     return dt.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', hour12: false })
+  }
+
+  // Fetch authoritative carer shift counts for the current date window and client filter
+  const refreshInvoiceCarerCounts = async () => {
+    try {
+      const supabase = getSupabaseClient()
+      const dayYmd = toYmdLocal(currentDate)
+      const rangeFrom = dateFrom || dayYmd
+      const rangeTo = dateTo || dayYmd
+
+      let query = supabase
+        .from('shifts')
+        .select('carer_id')
+        .gte('shift_date', rangeFrom)
+        .lte('shift_date', rangeTo)
+
+      if (selectedClientId) {
+        query = query.eq('client_id', selectedClientId)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Failed to load shift counts', error)
+        return
+      }
+
+      const counts = new Map<number, number>()
+      for (const row of data || []) {
+        counts.set(row.carer_id, (counts.get(row.carer_id) || 0) + 1)
+      }
+
+      const options = carers
+        .filter(c => counts.has(c.id))
+        .map(c => ({ carer: c, count: counts.get(c.id) || 0 }))
+        .sort((a, b) => a.carer.first_name.localeCompare(b.carer.first_name))
+
+      setInvoiceCarerOptions(options)
+    } catch (err) {
+      console.error('Failed to refresh invoice carer counts', err)
+    }
   }
 
   function computeSidebarAggregates(range: Shift[]) {
@@ -1872,18 +1944,6 @@ export default function CalendarClient() {
     setEditingShift(null)
   }
 
-  // Time conversion utilities
-  const timeStringToMinutes = (timeStr: string) => {
-    const [hours, minutes] = timeStr.split(':').map(Number)
-    return hours * 60 + minutes
-  }
-  
-  const minutesToTimeString = (totalMinutes: number) => {
-    const hours = Math.floor(totalMinutes / 60) % 24
-    const minutes = totalMinutes % 60
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
-  }
-
   // Drag handlers for shift movement and resizing
   const handleShiftMouseDown = (e: React.MouseEvent, shift: Shift, dragType: 'move' | 'resize-top' | 'resize-bottom') => {
     e.stopPropagation()
@@ -2139,6 +2199,75 @@ export default function CalendarClient() {
     return errorText
   }
 
+      const handleOpenInvoiceDialog = () => {
+        setInvoiceError(null)
+        setShowActionsMenu(false)
+        setInvoiceDate(toYmdLocal(new Date()))
+
+        // Seed options from in-memory counts while we fetch authoritative counts
+        setInvoiceCarerOptions(carersWithShiftsInRange)
+        const firstCarerId = carersWithShiftsInRange[0]?.carer.id
+        setInvoiceCarerIds(firstCarerId ? [firstCarerId] : [])
+        setInvoiceNumber(prev => prev || 'INV-')
+        setShowInvoiceDialog(true)
+
+        void refreshInvoiceCarerCounts()
+      }
+
+      const handleGenerateInvoice = async () => {
+        if (invoiceCarerIds.length !== 1) {
+          setInvoiceError('Select one carer to generate an invoice.')
+          return
+        }
+
+        if (!invoiceNumber.trim()) {
+          setInvoiceError('Invoice number is required.')
+          return
+        }
+
+        const fallbackDate = toYmdLocal(currentDate)
+        const payload = {
+          invoiceDate: invoiceDate || fallbackDate,
+          invoiceNumber: invoiceNumber.trim(),
+          carerIds: invoiceCarerIds,
+          clientId: selectedClientId || undefined,
+          dateFrom: dateFrom || fallbackDate,
+          dateTo: dateTo || fallbackDate
+        }
+
+        try {
+          setInvoiceIsGenerating(true)
+          setInvoiceError(null)
+
+          const res = await fetch('/api/generate-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+
+          if (!res.ok) {
+            const details = await res.json().catch(() => ({} as any))
+            throw new Error(details?.error || 'Failed to generate invoice.')
+          }
+
+          const blob = await res.blob()
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `Invoice_${invoiceNumber.trim() || payload.invoiceDate}.xlsx`
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          URL.revokeObjectURL(url)
+
+          setShowInvoiceDialog(false)
+        } catch (err) {
+          setInvoiceError(err instanceof Error ? err.message : 'Failed to generate invoice.')
+        } finally {
+          setInvoiceIsGenerating(false)
+        }
+      }
+
   const handleCopyDayClick = () => {
     setCopyDayError(null)
     if (!dateFrom || !dateTo) {
@@ -2153,10 +2282,6 @@ export default function CalendarClient() {
 
     setCopyDaySelected([])
     setShowCopyDayDialog(true)
-  }
-
-  const handleSaveCalendarClick = () => {
-    alert('There are no saved Calendars at the moment. Come back later.')
   }
 
   const hours = Array.from({ length: 24 }, (_, i) => {
@@ -2376,11 +2501,10 @@ export default function CalendarClient() {
               <button
                 className="cal-actions-item"
                 onClick={() => {
-                  setShowActionsMenu(false)
-                  handleSaveCalendarClick()
+                  handleOpenInvoiceDialog()
                 }}
               >
-                Save calendar
+                Generate invoice
               </button>
             </div>
           )}
@@ -2453,6 +2577,93 @@ export default function CalendarClient() {
                 disabled={copyDayIsWorking || !dateFrom || !dateTo || copyDaySelected.length === 0}
               >
                 {copyDayIsWorking ? 'Copying…' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInvoiceDialog && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-copy-dialog">
+            <h3>Generate invoice</h3>
+            <div style={{ marginBottom: 10, color: '#374151', fontSize: 14 }}>
+              Uses shifts from <strong>{dateFrom || toYmdLocal(currentDate)}</strong> to <strong>{dateTo || toYmdLocal(currentDate)}</strong>.
+            </div>
+
+            <div className="cal-range-controls" style={{ gap: 12 }}>
+              <label className="cal-range-field" style={{ flex: 1 }}>
+                <span className="cal-range-label">Invoice date</span>
+                <input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(normalizeDateInput(e.target.value))}
+                />
+              </label>
+
+              <label className="cal-range-field" style={{ flex: 1 }}>
+                <span className="cal-range-label">Invoice number</span>
+                <input
+                  type="text"
+                  value={invoiceNumber}
+                  onChange={(e) => {
+                    setInvoiceNumber(e.target.value)
+                    setInvoiceError(null)
+                  }}
+                  placeholder="Enter invoice number"
+                />
+              </label>
+            </div>
+
+            <div className="cal-range-controls" style={{ marginTop: 12 }}>
+              <label className="cal-range-field" style={{ width: '100%' }}>
+                <span className="cal-range-label">Carer (multi-select)</span>
+                {(invoiceCarerOptions.length || carersWithShiftsInRange.length) === 0 ? (
+                  <div style={{ color: '#6b7280', fontSize: 14 }}>
+                    No carers have shifts in the selected period.
+                  </div>
+                ) : (
+                  <select
+                    multiple
+                    size={Math.min(6, Math.max(3, (invoiceCarerOptions.length || carersWithShiftsInRange.length)))}
+                    value={invoiceCarerIds.map(String)}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions).map((o) => Number(o.value))
+                      setInvoiceCarerIds(selected)
+                      setInvoiceError(null)
+                    }}
+                  >
+                    {(invoiceCarerOptions.length ? invoiceCarerOptions : carersWithShiftsInRange).map(({ carer, count }) => (
+                      <option key={carer.id} value={carer.id}>
+                        {carer.first_name} {carer.last_name} ({count} shift{count === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            </div>
+
+            {invoiceError && (
+              <div className="cal-error-toast" style={{ position: 'relative', top: 0, left: 0, transform: 'none', marginTop: 10 }}>
+                Error: {invoiceError}
+              </div>
+            )}
+
+            <div className="cal-dialog-buttons" style={{ marginTop: 16 }}>
+              <button
+                onClick={() => {
+                  setShowInvoiceDialog(false)
+                  setInvoiceError(null)
+                }}
+                disabled={invoiceIsGenerating}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateInvoice}
+                disabled={invoiceIsGenerating || ((invoiceCarerOptions.length || carersWithShiftsInRange.length) === 0)}
+              >
+                {invoiceIsGenerating ? 'Generating…' : 'Generate'}
               </button>
             </div>
           </div>
@@ -3123,6 +3334,12 @@ export default function CalendarClient() {
 
         .cal-footer-cell.overlap-cell {
           border-left: 1px solid rgba(255,255,255,0.65);
+          color: #fecaca;
+        }
+
+        .cal-footer-cell.overlap-cell .cal-footer-label,
+        .cal-footer-cell.overlap-cell .cal-footer-value {
+          color: #fecaca;
         }
 
         .cal-footer-label {

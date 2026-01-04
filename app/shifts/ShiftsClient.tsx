@@ -737,7 +737,7 @@ export default function ShiftsClient() {
               {costBreakdown.length > 0 && (
                 <div className="cost-breakdown">
                   <h3>Cost Breakdown</h3>
-                  <table className="breakdown-table">
+                  <table className="breakdown-table" border="0" style={{ border: 'none' }}>
                     <thead>
                       <tr>
                         <th>Description</th>
@@ -756,8 +756,8 @@ export default function ShiftsClient() {
                         </tr>
                       ))}
                       <tr className="total-row">
-                        <td colSpan={3}><strong>Total:</strong></td>
-                        <td><strong>${getTotalCost().toFixed(2)}</strong></td>
+                        <td colSpan={3} style={{ borderRight: '1px solid #cbd5e1' }}><strong>Total:</strong></td>
+                        <td style={{ borderRight: 'none', borderLeft: 'none' }}><strong>${getTotalCost().toFixed(2)}</strong></td>
                       </tr>
                     </tbody>
                   </table>
@@ -1063,13 +1063,15 @@ export default function ShiftsClient() {
           width: 100%;
           border-collapse: collapse;
           margin-top: 0.5rem;
+          border: none !important;
         }
 
         .breakdown-table th,
         .breakdown-table td {
           padding: 10px 12px;
           text-align: left;
-          border-bottom: 1px solid #e2e8f0;
+          border: none !important;
+          border-bottom: 1px solid #e2e8f0 !important;
           color: #0f172a;
         }
 
@@ -1082,6 +1084,10 @@ export default function ShiftsClient() {
           border-top: 2px solid #cbd5e1;
           background-color: #eef2f8;
           font-weight: 700;
+        }
+
+        .total-row td:first-child {
+          border-right: 1px solid #cbd5e1 !important;
         }
 
         .text-muted {

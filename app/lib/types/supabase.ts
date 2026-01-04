@@ -192,6 +192,35 @@ export type Database = {
           updated_at?: string | null;
         };
       };
+      saved_calendars: {
+        Row: {
+          id: string;
+          name: string;
+          date_from: string | null;
+          date_to: string | null;
+          client_id: number | null;
+          config: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          date_from?: string | null;
+          date_to?: string | null;
+          client_id?: number | null;
+          config: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          date_from?: string | null;
+          date_to?: string | null;
+          client_id?: number | null;
+          config?: Json;
+          created_at?: string;
+        };
+      };
     };
     Functions: Record<string, never>;
     Views: Record<string, never>;

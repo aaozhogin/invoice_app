@@ -88,12 +88,14 @@ export default function CarersClient() {
   };
 
   const validateBSB = (bsb: string): boolean => {
-    const bsbRegex = /^\d{6}$/;
-    return bsbRegex.test(bsb.replace(/\s/g, ''));
+    // Allow format like 123456 or 123-456 (6 digits with optional dash)
+    const bsbRegex = /^\d{3}-?\d{3}$/;
+    return bsbRegex.test(bsb);
   };
 
   const validateAccountNumber = (accountNumber: string): boolean => {
-    return /^\d+$/.test(accountNumber);
+    // Allow digits and dashes for account numbers
+    return /^[\d-]+$/.test(accountNumber) && /\d/.test(accountNumber);
   };
 
   // Validation errors
@@ -107,10 +109,10 @@ export default function CarersClient() {
     ? 'ABN can only contain numbers and spaces' : '';
   
   const bsbError = form.bsb.trim() !== '' && !validateBSB(form.bsb.trim()) 
-    ? 'BSB must be exactly 6 digits' : '';
+    ? 'BSB must be 6 digits (e.g., 123456 or 123-456)' : '';
   
   const accountNumberError = form.accountNumber.trim() !== '' && !validateAccountNumber(form.accountNumber.trim()) 
-    ? 'Account number must contain only digits' : '';
+    ? 'Account number can contain digits and dashes' : '';
 
   const isFormValid = 
     form.firstName.trim() !== '' &&
@@ -496,9 +498,9 @@ export default function CarersClient() {
             <input
               id="bsb"
               type="text"
-              placeholder="Enter 6-digit BSB"
+              placeholder="Enter BSB (e.g., 123456 or 123-456)"
               value={form.bsb}
-              maxLength={6}
+              maxLength={7}
               onChange={(e) => setForm(prev => ({ ...prev, bsb: e.target.value }))}
             />
             {bsbError && <div className="field-error">{bsbError}</div>}
