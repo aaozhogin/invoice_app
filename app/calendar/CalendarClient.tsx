@@ -134,6 +134,7 @@ export default function CalendarClient() {
   const [copyWeekIsWorking, setCopyWeekIsWorking] = useState(false)
   const [copyWeekError, setCopyWeekError] = useState<string | null>(null)
   const [deleteAllShiftsDateConfirm, setDeleteAllShiftsDateConfirm] = useState<string | null>(null)
+  const [deleteAllShiftsWeekConfirm, setDeleteAllShiftsWeekConfirm] = useState(false)
   const [showCopyShiftDialog, setShowCopyShiftDialog] = useState(false)
   const [copyShiftSelected, setCopyShiftSelected] = useState<string[]>([])
   const [copyShiftIsWorking, setCopyShiftIsWorking] = useState(false)
@@ -3079,6 +3080,42 @@ export default function CalendarClient() {
     }
   }
 
+  const handleDeleteAllShiftsForWeek = async () => {
+    try {
+      const srcMonday = getMonday(currentDate)
+      const srcWeekStart = toYmdLocal(srcMonday)
+      const srcSunday = new Date(srcMonday)
+      srcSunday.setDate(srcSunday.getDate() + 6)
+      const srcWeekEnd = toYmdLocal(srcSunday)
+      
+      const supabase = getSupabaseClient()
+      const { error } = await supabase.from('shifts').delete()
+        .gte('shift_date', srcWeekStart)
+        .lte('shift_date', srcWeekEnd)
+        .eq('client_id', selectedClientId)
+      
+      if (error) throw error
+      
+      setDeleteAllShiftsWeekConfirm(false)
+      await fetchData()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete shifts'
+      setError(msg)
+    }
+  }
+
+  const getWeekShiftCount = () => {
+    const srcMonday = getMonday(currentDate)
+    const srcWeekStart = toYmdLocal(srcMonday)
+    const srcSunday = new Date(srcMonday)
+    srcSunday.setDate(srcSunday.getDate() + 6)
+    const srcWeekEnd = toYmdLocal(srcSunday)
+    
+    return rangeShifts.filter(
+      s => s.shift_date >= srcWeekStart && s.shift_date <= srcWeekEnd && s.client_id === selectedClientId
+    ).length
+  }
+
   const hours = Array.from({ length: 24 }, (_, i) => {
     const hour = i
     if (hour === 0) return '12 AM'
@@ -3317,15 +3354,26 @@ export default function CalendarClient() {
                 </button>
               )}
               {viewMode === 'week' && (
-                <button
-                  className="cal-actions-item"
-                  onClick={() => {
-                    setShowActionsMenu(false)
-                    handleCopyWeekClick()
-                  }}
-                >
-                  Copy week
-                </button>
+                <>
+                  <button
+                    className="cal-actions-item"
+                    onClick={() => {
+                      setShowActionsMenu(false)
+                      handleCopyWeekClick()
+                    }}
+                  >
+                    Copy week
+                  </button>
+                  <button
+                    className="cal-actions-item"
+                    onClick={() => {
+                      setShowActionsMenu(false)
+                      setDeleteAllShiftsWeekConfirm(true)
+                    }}
+                  >
+                    Delete all shifts in a week
+                  </button>
+                </>
               )}
               <button
                 className="cal-actions-item"
@@ -3708,6 +3756,33 @@ export default function CalendarClient() {
               </button>
               <button
                 onClick={() => handleDeleteAllShiftsForDay(deleteAllShiftsDateConfirm)}
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                Yes, Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteAllShiftsWeekConfirm && (
+        <div className="cal-dialog-overlay">
+          <div className="cal-dialog" style={{ maxWidth: '400px' }}>
+            <h3>Delete all shifts in week?</h3>
+            <div style={{ marginBottom: 16, color: '#374151', fontSize: 14 }}>
+              Are you sure? This operation will bulk delete <strong>{getWeekShiftCount()} shifts</strong>.
+            </div>
+            <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16 }}>
+              This action cannot be undone.
+            </div>
+            <div className="cal-dialog-buttons">
+              <button
+                onClick={() => setDeleteAllShiftsWeekConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteAllShiftsForWeek()}
                 style={{ backgroundColor: '#ef4444' }}
               >
                 Yes, Delete All
