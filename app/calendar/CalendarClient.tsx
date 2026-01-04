@@ -2082,12 +2082,13 @@ export default function CalendarClient() {
             const newStart = new Date(startDateTime).getTime()
             const newEnd = new Date(endDateTime).getTime()
 
-            let overlapCount = 0
+            // Collect all overlapping shifts with the new shift
+            const overlappingShifts = []
             for (const existing of originalExistingShifts) {
               const existingStart = new Date(existing.time_from).getTime()
               const existingEnd = new Date(existing.time_to).getTime()
               if (newStart < existingEnd && newEnd > existingStart) {
-                overlapCount++
+                overlappingShifts.push({ start: existingStart, end: existingEnd })
                 console.log(`  ⚠️ Overlap with existing: ${isoToLocalHhmm(existing.time_from)} - ${isoToLocalHhmm(existing.time_to)}`)
               }
             }
@@ -2097,16 +2098,56 @@ export default function CalendarClient() {
                 const insertedStart = new Date(insertedShift.time_from).getTime()
                 const insertedEnd = new Date(insertedShift.time_to).getTime()
                 if (newStart < insertedEnd && newEnd > insertedStart) {
-                  overlapCount++
+                  overlappingShifts.push({ start: insertedStart, end: insertedEnd })
                   console.log(`  ⚠️ Overlap with already-inserted: ${isoToLocalHhmm(insertedShift.time_from)} - ${isoToLocalHhmm(insertedShift.time_to)}`)
                 }
               }
             }
 
-            console.log(`  Shift ${targetYmd} ${startTime}-${endTime}: ${overlapCount} overlaps`)
+            // Check if there's any point where the new shift + 2 or more existing shifts overlap concurrently
+            let hasTripleOverlap = false
+            if (overlappingShifts.length >= 2) {
+              // Create events for sweep line algorithm
+              const events: Array<{ time: number, type: 'start' | 'end' }> = []
+              
+              // Add new shift boundaries
+              events.push({ time: newStart, type: 'start' })
+              events.push({ time: newEnd, type: 'end' })
+              
+              // Add overlapping shifts boundaries
+              for (const shift of overlappingShifts) {
+                events.push({ time: shift.start, type: 'start' })
+                events.push({ time: shift.end, type: 'end' })
+              }
+              
+              // Sort events: start events before end events at same time
+              events.sort((a, b) => {
+                if (a.time !== b.time) return a.time - b.time
+                return a.type === 'start' ? -1 : 1
+              })
+              
+              // Sweep through and find max concurrent shifts
+              let activeCount = 0
+              let maxConcurrent = 0
+              for (const event of events) {
+                if (event.type === 'start') {
+                  activeCount++
+                  maxConcurrent = Math.max(maxConcurrent, activeCount)
+                } else {
+                  activeCount--
+                }
+              }
+              
+              // If max concurrent is 3 or more, it's a triple overlap
+              if (maxConcurrent >= 3) {
+                hasTripleOverlap = true
+              }
+            }
 
-            if (overlapCount >= 2) {
-              console.log(`  ❌ Too many overlaps! Skipping this shift.`)
+            console.log(`  Shift ${targetYmd} ${startTime}-${endTime}: ${overlappingShifts.length} overlaps, hasTripleOverlap: ${hasTripleOverlap}`)
+
+            if (hasTripleOverlap) {
+              console.log(`  ❌ True triple overlap detected! Skipping this shift.`)
               if (!weeksWithOverlaps.includes(targetWeekStart)) {
                 weeksWithOverlaps.push(targetWeekStart)
               }
