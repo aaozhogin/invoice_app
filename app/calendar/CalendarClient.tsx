@@ -3041,7 +3041,7 @@ export default function CalendarClient() {
       )}
 
       {showCopyShiftDialog && (
-        <div className="cal-dialog-overlay">
+        <div className="cal-dialog-overlay" style={{ zIndex: 1001 }}>
           <div className="cal-copy-dialog">
             <h3>Copy Shift</h3>
             <div style={{ marginBottom: 8, color: '#374151', fontSize: 14 }}>
