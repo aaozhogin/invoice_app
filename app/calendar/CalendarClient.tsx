@@ -1340,19 +1340,26 @@ export default function CalendarClient() {
       newEnd = new Date(nextDayEndDate).getTime()
     }
 
-    // Create events for all existing shifts on this date
+    // Create events for all existing shifts on this date AND previous day (for overnight shifts)
     type OverlapEvent = { t: number; kind: 'start' | 'end' }
     const events: OverlapEvent[] = []
 
+    // Calculate the start of the target day (00:00 in local time)
+    const targetDayStart = new Date(buildUtcIsoFromLocal(shiftDate, '00:00')).getTime()
+
     for (const s of shifts) {
       if (excludeShiftId && s.id === excludeShiftId) continue
-      if (s.shift_date !== shiftDate) continue
-
+      
       const existingStart = new Date(s.time_from).getTime()
       const existingEnd = new Date(s.time_to).getTime()
 
-      events.push({ t: existingStart, kind: 'start' })
-      events.push({ t: existingEnd, kind: 'end' })
+      // Include shift if:
+      // 1. It's on the same date, OR
+      // 2. It's from the previous day and extends past midnight into the target day
+      if (s.shift_date === shiftDate || (existingEnd > targetDayStart)) {
+        events.push({ t: existingStart, kind: 'start' })
+        events.push({ t: existingEnd, kind: 'end' })
+      }
     }
 
     // Add events for the new shift
