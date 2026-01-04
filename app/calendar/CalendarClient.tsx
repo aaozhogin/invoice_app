@@ -5284,7 +5284,7 @@ export default function CalendarClient() {
           display: flex;
           gap: 0;
           overflow-x: auto;
-          height: calc(100vh - 150px);
+          height: calc(100vh - 120px);
         }
 
         .cal-week-hours-column {
