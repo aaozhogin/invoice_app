@@ -1132,7 +1132,7 @@ export default function CalendarClient() {
 
     const overallSummary = {
       totalHours: Math.round(overallHours * 100) / 100,
-      totalCost: Math.round(overallCost * 100) / 100,
+      totalCost: Math.round((overallCost - overlapCost) * 100) / 100,
     }
 
     return {
