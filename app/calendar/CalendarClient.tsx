@@ -2818,7 +2818,9 @@ export default function CalendarClient() {
                           setShowShiftDialog(true);
                         }}
                       >
-                        <div style={{ fontWeight: 600 }}>{shift.time_from.substring(11, 16)} - {shift.time_to.substring(11, 16)}</div>
+                        <div style={{ fontWeight: 600 }}>
+                          {new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })} - {new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                        </div>
                         <div>{shift.carers?.first_name} {shift.carers?.last_name}</div>
                         {shift.clients && <div style={{ fontSize: '0.8em', opacity: 0.8 }}>{shift.clients.first_name}</div>}
                       </div>
