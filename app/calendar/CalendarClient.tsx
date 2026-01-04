@@ -1726,10 +1726,10 @@ export default function CalendarClient() {
             const existingStart = new Date(existing.time_from).getTime()
             const existingEnd = new Date(existing.time_to).getTime()
             
-            // Check if intervals overlap
+            // Check if intervals overlap (exclusive: touching boundaries don't count as overlap)
             if (newStart < existingEnd && newEnd > existingStart) {
               overlapCount++
-              console.log(`⚠️ Overlap detected: New shift (${startTime}-${endTime}) overlaps with existing shift ${existing.id} (${new Date(existing.time_from).toISOString()}-${new Date(existing.time_to).toISOString()})`)
+              console.log(`⚠️ Overlap detected: New shift (${startTime}-${endTime} on ${targetYmd}) overlaps with existing shift ${existing.id} (${new Date(existing.time_from).toISOString()}-${new Date(existing.time_to).toISOString()})`)
             }
           }
 
@@ -1742,12 +1742,12 @@ export default function CalendarClient() {
               
               if (newStart < insertedEnd && newEnd > insertedStart) {
                 overlapCount++
-                console.log(`⚠️ Overlap detected with batch shift: New shift (${startTime}-${endTime}) overlaps with batch shift (${new Date(insertedShift.time_from).toISOString()}-${new Date(insertedShift.time_to).toISOString()})`)
+                console.log(`⚠️ Overlap detected with batch shift: New shift (${startTime}-${endTime} on ${targetYmd}) overlaps with batch shift (${new Date(insertedShift.time_from).toISOString()}-${new Date(insertedShift.time_to).toISOString()})`)
               }
             }
           }
           
-          console.log(`📊 Overlap count for shift being copied: ${overlapCount}`)
+          console.log(`📊 Overlap count for shift being copied (${startTime}-${endTime} on ${targetYmd}): ${overlapCount}`)
           
           // Block if new shift would overlap with 2+ existing shifts (creating 3+ concurrent shifts)
           if (overlapCount >= 2) {
