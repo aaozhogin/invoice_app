@@ -335,6 +335,7 @@ export default function CalendarClient() {
         supabase.from('shifts').select(`
           *,
           carers(id, first_name, last_name, email, color),
+          clients(id, first_name, last_name),
           line_items(id, code, category, description, billed_rate)
         `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
       ])
