@@ -2554,13 +2554,17 @@ export default function CalendarClient() {
             {viewMode === 'day' ? 'Next Day →' : 'Next Week →'}
           </button>
         </div>
-        <button onClick={() => setCurrentDate(new Date())}>Today</button>
-        <button 
-          onClick={() => setViewMode(viewMode === 'day' ? 'week' : 'day')}
-          className="view-toggle-btn"
-        >
-          {viewMode === 'day' ? 'Week View' : 'Day View'}
-        </button>
+        <div className="cal-button-group">
+          <button onClick={() => setCurrentDate(new Date())}>
+            {viewMode === 'day' ? 'Today' : 'Current Week'}
+          </button>
+          <button 
+            onClick={() => setViewMode(viewMode === 'day' ? 'week' : 'day')}
+            className="view-toggle-btn"
+          >
+            {viewMode === 'day' ? 'Week View' : 'Day View'}
+          </button>
+        </div>
         <div className="cal-actions">
           <button
             className="cal-actions-btn"
@@ -2818,11 +2822,19 @@ export default function CalendarClient() {
                           setShowShiftDialog(true);
                         }}
                       >
-                        <div style={{ fontWeight: 600 }}>
+                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>
                           {new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })} - {new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        <div>{shift.carers?.first_name} {shift.carers?.last_name}</div>
-                        {shift.clients && <div style={{ fontSize: '0.8em', opacity: 0.8 }}>{shift.clients.first_name}</div>}
+                        <div style={{ marginBottom: '4px' }}>{shift.carers?.first_name} {shift.carers?.last_name}</div>
+                        {shift.clients && <div style={{ fontSize: '0.85em', opacity: 0.9, marginBottom: '4px' }}>{shift.clients.first_name}</div>}
+                        {shift.line_items && <div style={{ fontSize: '0.8em', opacity: 0.75, marginBottom: '4px' }}>{shift.line_items.code} - {shift.line_items.description}</div>}
+                        <div style={{ fontSize: '0.85em', color: '#2563eb', marginBottom: '4px' }}>${(shift.cost || 0).toFixed(2)}</div>
+                        {(shift.category || shift.line_items?.sleepover || shift.line_items?.public_holiday) && (
+                          <div style={{ fontSize: '0.75em', opacity: 0.8, display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {shift.line_items?.sleepover && <span style={{ backgroundColor: '#fef3c7', padding: '2px 4px', borderRadius: '2px', color: '#000' }}>Sleepover</span>}
+                            {shift.line_items?.public_holiday && <span style={{ backgroundColor: '#fecaca', padding: '2px 4px', borderRadius: '2px', color: '#000' }}>Holiday</span>}
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -3930,13 +3942,21 @@ export default function CalendarClient() {
         .cal-week-shift-card {
           background-color: var(--surface-accent);
           border-left: 4px solid;
-          padding: 8px;
+          padding: 10px;
           border-radius: 4px;
           font-size: 0.85em;
           color: var(--text);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+          overflow: visible;
+          white-space: normal;
+          word-break: break-word;
+          min-height: 120px;
+          display: flex;
+          flex-direction: column;
+          transition: background-color 0.2s;
+        }
+
+        .cal-week-shift-card:hover {
+          background-color: var(--surface-hover);
         }
 
         .cal-week-no-shifts {
@@ -3945,6 +3965,25 @@ export default function CalendarClient() {
           text-align: center;
           margin-top: auto;
           margin-bottom: auto;
+        }
+
+        .cal-button-group {
+          display: flex;
+          gap: 8px;
+        }
+
+        .cal-button-group button {
+          padding: 8px 16px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: white;
+          cursor: pointer;
+          font-size: 14px;
+          transition: background-color 0.2s;
+        }
+
+        .cal-button-group button:hover {
+          background: #f9fafb;
         }
       `}</style>
     </div>
