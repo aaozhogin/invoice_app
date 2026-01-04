@@ -5122,6 +5122,7 @@ export default function CalendarClient() {
           display: flex;
           gap: 0;
           overflow-x: auto;
+          overflow-y: auto;
           height: calc(100vh - 210px);
         }
 
@@ -5177,7 +5178,7 @@ export default function CalendarClient() {
         .cal-week-timeline-area {
           flex: 1;
           position: relative;
-          height: 1440px;
+          height: ${HOUR_HEIGHT * 24}px;
           background-color: var(--surface);
           border-right: 1px solid var(--border);
         }
