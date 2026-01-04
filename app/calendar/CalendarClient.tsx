@@ -109,6 +109,7 @@ function getInitialSelectedClientId(): number | null {
 export default function CalendarClient() {
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState<Date>(getInitialCurrentDate)
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dateRangeError, setDateRangeError] = useState<string | null>(null)
@@ -2174,6 +2175,20 @@ export default function CalendarClient() {
     })
   }
 
+  const getMonday = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  }
+
+  const getSunday = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? 0 : 7);
+    return new Date(d.setDate(diff));
+  }
+
   const renderErrorMessage = (errorText: string) => {
     // Check if error contains link marker [text]
     const linkPattern = /\[([^\]]+)\]/
@@ -2509,21 +2524,33 @@ export default function CalendarClient() {
               setCurrentDate(prev)
             }}
           >
-            ← Previous Day
+            {viewMode === 'day' ? '← Previous Day' : '← Previous Week'}
           </button>
-          <span className="cal-current-date">{formatDate(currentDate)}</span>
+          <span className="cal-current-date">
+            {viewMode === 'day' 
+              ? formatDate(currentDate)
+              : `${formatDate(getMonday(currentDate))} - ${formatDate(getSunday(currentDate))}`
+            }
+          </span>
           <button
-            disabled={!!dateTo && toYmdLocal(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)) > dateTo}
+            disabled={!!dateTo && toYmdLocal(new Date(currentDate.getTime() + (viewMode === 'day' ? 24 : 7 * 24) * 60 * 60 * 1000)) > dateTo}
             onClick={() => {
-              const next = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000)
+              const increment = viewMode === 'day' ? 24 : 7 * 24;
+              const next = new Date(currentDate.getTime() + increment * 60 * 60 * 1000)
               if (dateTo && toYmdLocal(next) > dateTo) return
               setCurrentDate(next)
             }}
           >
-            Next Day →
+            {viewMode === 'day' ? 'Next Day →' : 'Next Week →'}
           </button>
         </div>
         <button onClick={() => setCurrentDate(new Date())}>Today</button>
+        <button 
+          onClick={() => setViewMode(viewMode === 'day' ? 'week' : 'day')}
+          className="view-toggle-btn"
+        >
+          {viewMode === 'day' ? 'Week View' : 'Day View'}
+        </button>
         <div className="cal-actions">
           <button
             className="cal-actions-btn"
@@ -2750,7 +2777,51 @@ export default function CalendarClient() {
         </div>
       )}
 
-      <div className="cal-main-container">
+      {viewMode === 'week' ? (
+        // Week View
+        <div className="cal-week-container">
+          {Array.from({ length: 7 }, (_, i) => {
+            const dayDate = new Date(getMonday(currentDate));
+            dayDate.setDate(dayDate.getDate() + i);
+            const dayYmd = toYmdLocal(dayDate);
+            const dayShifts = shifts.filter(s => s.shift_date === dayYmd);
+            
+            return (
+              <div key={dayYmd} className="cal-week-day">
+                <div className="cal-week-day-header">
+                  {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+                <div className="cal-week-day-shifts">
+                  {dayShifts.length > 0 ? (
+                    dayShifts.map(shift => (
+                      <div 
+                        key={shift.id} 
+                        className="cal-week-shift-card"
+                        style={{
+                          borderLeftColor: shift.carers?.color || '#999',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          setEditingShift(shift);
+                          setShowShiftDialog(true);
+                        }}
+                      >
+                        <div style={{ fontWeight: 600 }}>{shift.time_from.substring(11, 16)} - {shift.time_to.substring(11, 16)}</div>
+                        <div>{shift.carers?.first_name} {shift.carers?.last_name}</div>
+                        {shift.clients && <div style={{ fontSize: '0.8em', opacity: 0.8 }}>{shift.clients.first_name}</div>}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="cal-week-no-shifts">No shifts</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        // Day View
+        <div className="cal-main-container">
         <div className="cal-hours-column">
           {hours.map((hour, index) => (
             <div key={index} className="cal-hour-label">
@@ -3004,6 +3075,7 @@ export default function CalendarClient() {
           })()}
         </div>
       </div>
+      )}
 
       <div className="cal-footer">
         {carerTotals.length === 0 ? (
@@ -3789,6 +3861,76 @@ export default function CalendarClient() {
         .cal-dialog-buttons button:disabled {
           background: #d1d5db;
           cursor: not-allowed;
+        }
+
+        .view-toggle-btn {
+          padding: 8px 16px;
+          background-color: var(--surface-accent);
+          color: var(--text);
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: background-color 0.2s;
+        }
+
+        .view-toggle-btn:hover {
+          background-color: var(--surface-hover);
+        }
+
+        .cal-week-container {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+          gap: 8px;
+          overflow-x: auto;
+          padding-bottom: 20px;
+        }
+
+        .cal-week-day {
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          padding: 12px;
+          background-color: var(--surface);
+          min-height: 400px;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .cal-week-day-header {
+          font-weight: 600;
+          text-align: center;
+          padding-bottom: 12px;
+          border-bottom: 2px solid var(--border);
+          margin-bottom: 12px;
+          color: var(--text);
+        }
+
+        .cal-week-day-shifts {
+          flex: 1;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .cal-week-shift-card {
+          background-color: var(--surface-accent);
+          border-left: 4px solid;
+          padding: 8px;
+          border-radius: 4px;
+          font-size: 0.85em;
+          color: var(--text);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .cal-week-no-shifts {
+          color: var(--text-secondary);
+          font-size: 0.9em;
+          text-align: center;
+          margin-top: auto;
+          margin-bottom: auto;
         }
       `}</style>
     </div>
