@@ -275,10 +275,14 @@ export async function POST(req: Request) {
 
     const parseTimeToDate = (t: string) => {
       if (!t) return ''
-      const timePart = t.includes('T') ? t.split('T')[1]?.slice(0, 8) : t
-      const iso = `1970-01-01T${timePart}`
-      const dt = new Date(iso)
-      return Number.isNaN(dt.getTime()) ? t : dt
+      // Parse the timestamp and extract local time components
+      const dt = new Date(t)
+      if (Number.isNaN(dt.getTime())) return t
+      
+      // Create a new date with just the time components in local timezone
+      // Use year 1970 for consistency with Excel's time-only values
+      const localDate = new Date(1970, 0, 1, dt.getHours(), dt.getMinutes(), dt.getSeconds())
+      return localDate
     }
 
     // Clear placeholder rows in the template
