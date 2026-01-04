@@ -1295,7 +1295,10 @@ export default function CalendarClient() {
 
   // Check if a new shift with the given carer and times overlaps with any existing shift for the same carer
   const checkCarerOverlap = (carerId: number, startTime: string, endTime: string, shiftDate: string, excludeShiftId?: number): boolean => {
-    for (const s of shifts) {
+    // Use rangeShifts if available (has full date range), otherwise fall back to shifts (current day only)
+    const shiftsToCheck = rangeShifts.length > 0 ? rangeShifts : shifts
+
+    for (const s of shiftsToCheck) {
       // Skip if this is the shift being edited
       if (excludeShiftId && s.id === excludeShiftId) continue
       
@@ -1358,7 +1361,10 @@ export default function CalendarClient() {
     const targetDayStart = new Date(buildUtcIsoFromLocal(shiftDate, '00:00')).getTime()
     const prevDayStr = addDaysToYmd(shiftDate, -1)
 
-    for (const s of shifts) {
+    // Use rangeShifts if available (has full date range), otherwise fall back to shifts (current day only)
+    const shiftsToCheck = rangeShifts.length > 0 ? rangeShifts : shifts
+
+    for (const s of shiftsToCheck) {
       if (excludeShiftId && s.id === excludeShiftId) continue
       
       const existingStart = new Date(s.time_from).getTime()
@@ -3823,7 +3829,12 @@ export default function CalendarClient() {
               <input
                 type="date"
                 value={newShift.shift_date}
-                onChange={(e) => setNewShift(prev => ({...prev, shift_date: e.target.value}))}
+                onChange={(e) => {
+                  const newDate = e.target.value
+                  // Clear validation error when date changes - user will see error on save if needed
+                  setError(null)
+                  setNewShift(prev => ({...prev, shift_date: newDate}))
+                }}
               />
             </div>
 
