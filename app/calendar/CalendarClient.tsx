@@ -128,7 +128,7 @@ export default function CalendarClient() {
   const [invoiceCarerIds, setInvoiceCarerIds] = useState<number[]>([])
   const [invoiceCarerOptions, setInvoiceCarerOptions] = useState<{ carer: Carer; count: number }[]>([])
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
-  const [invoiceSuccess, setInvoiceSuccess] = useState<{ fileName: string; fileData: string; mimeType: string } | null>(null)
+  const [invoiceSuccess, setInvoiceSuccess] = useState<{ fileName: string; fileData: string; mimeType: string; invoiceDate?: string; dueDate?: string } | null>(null)
   const [invoiceIsGenerating, setInvoiceIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [carers, setCarers] = useState<Carer[]>([])
@@ -2727,12 +2727,27 @@ export default function CalendarClient() {
 
           const json = await res.json()
           
+          // Calculate due date (invoice date + 7 days)
+          const invDate = new Date(invoiceDate || fallbackDate)
+          const dDate = new Date(invDate)
+          dDate.setDate(dDate.getDate() + 7)
+          
+          // Format dates as DD/MM/YYYY
+          const formatDate = (d: Date) => {
+            const dd = String(d.getDate()).padStart(2, '0')
+            const mm = String(d.getMonth() + 1).padStart(2, '0')
+            const yyyy = d.getFullYear()
+            return `${dd}/${mm}/${yyyy}`
+          }
+          
           // Store file data for user to download
           if (json.file?.data) {
             setInvoiceSuccess({
               fileName: json.file.name,
               fileData: json.file.data,
-              mimeType: json.file.mimeType
+              mimeType: json.file.mimeType,
+              invoiceDate: formatDate(invDate),
+              dueDate: formatDate(dDate)
             })
           }
 
@@ -3259,6 +3274,12 @@ export default function CalendarClient() {
                 color: '#d1fae5'
               }}>
                 <p style={{ margin: '0 0 0.75rem 0', fontWeight: 'bold' }}>✓ Invoice generated successfully!</p>
+                {invoiceSuccess.invoiceDate && invoiceSuccess.dueDate && (
+                  <div style={{ marginBottom: '0.75rem', fontSize: '0.95rem' }}>
+                    <div>Invoice Date: <strong>{invoiceSuccess.invoiceDate}</strong></div>
+                    <div>Due Date: <strong>{invoiceSuccess.dueDate}</strong></div>
+                  </div>
+                )}
                 <button
                   onClick={handleDownloadInvoice}
                   style={{
