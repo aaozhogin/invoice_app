@@ -2822,13 +2822,31 @@ export default function CalendarClient() {
                       <div key={i} className="cal-week-hour-line" style={{ top: i * HOUR_HEIGHT }} />
                     ))}
                     
-                    {dayShifts.map(shift => {
+                    {dayShifts.map((shift, shiftIndex) => {
                       const startTime = new Date(shift.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
                       const endTime = new Date(shift.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
                       const startMinutes = timeStringToMinutes(startTime);
                       const endMinutes = timeStringToMinutes(endTime);
                       const isOvernight = endMinutes < startMinutes;
                       const duration = isOvernight ? (24 * 60 - startMinutes + endMinutes) : (endMinutes - startMinutes);
+                      
+                      // Find overlapping shifts at same time
+                      const overlappingShifts = dayShifts.filter((s, idx) => {
+                        const sStart = timeStringToMinutes(new Date(s.time_from).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+                        const sEnd = timeStringToMinutes(new Date(s.time_to).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+                        const sIsOvernight = sEnd < sStart;
+                        
+                        // Check if overlaps with current shift
+                        if (sIsOvernight || isOvernight) {
+                          return !(sEnd <= startMinutes || sStart >= endMinutes);
+                        }
+                        return !(sEnd <= startMinutes || sStart >= endMinutes);
+                      });
+                      
+                      const overlapCount = overlappingShifts.length;
+                      const overlapIndex = overlappingShifts.findIndex(s => s.id === shift.id);
+                      const shiftWidth = (100 / overlapCount) - 1;
+                      const shiftLeft = overlapIndex * (100 / overlapCount);
                       
                       return (
                         <div
@@ -2837,27 +2855,30 @@ export default function CalendarClient() {
                           style={{
                             top: startMinutes,
                             height: Math.max(duration * (HOUR_HEIGHT / 60), 60),
+                            left: `${shiftLeft}%`,
+                            width: `${shiftWidth}%`,
                             backgroundColor: shift.carers?.color || '#3b82f6',
-                            borderLeftColor: shift.carers?.color || '#3b82f6'
+                            borderLeftColor: shift.carers?.color || '#3b82f6',
+                            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
                           }}
                           onClick={() => {
                             setEditingShift(shift);
                             setShowShiftDialog(true);
                           }}
                         >
-                          <div style={{ fontWeight: 600, fontSize: '0.9em', marginBottom: '4px' }}>
+                          <div style={{ fontWeight: 600, fontSize: '0.85em', marginBottom: '2px' }}>
                             {startTime} - {endTime}
                           </div>
-                          <div style={{ fontSize: '0.85em', marginBottom: '2px' }}>
-                            {shift.carers?.first_name} {shift.carers?.last_name}
+                          <div style={{ fontSize: '0.75em', marginBottom: '1px' }}>
+                            {shift.carers?.first_name}
                           </div>
-                          {shift.clients && <div style={{ fontSize: '0.8em', opacity: 0.9, marginBottom: '2px' }}>{shift.clients.first_name}</div>}
-                          {shift.line_items && <div style={{ fontSize: '0.75em', opacity: 0.85, marginBottom: '2px' }}>{shift.line_items.code}</div>}
-                          <div style={{ fontSize: '0.8em', marginBottom: '2px' }}>${(shift.cost || 0).toFixed(2)}</div>
+                          {shift.clients && <div style={{ fontSize: '0.7em', opacity: 0.9, marginBottom: '1px' }}>{shift.clients.first_name}</div>}
+                          {shift.line_items && <div style={{ fontSize: '0.7em', opacity: 0.85, marginBottom: '1px' }}>{shift.line_items.code}</div>}
+                          <div style={{ fontSize: '0.7em', marginBottom: '1px' }}>${(shift.cost || 0).toFixed(2)}</div>
                           {(shift.line_items?.sleepover || shift.line_items?.public_holiday) && (
-                            <div style={{ fontSize: '0.7em', display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
-                              {shift.line_items?.sleepover && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '1px 3px', borderRadius: '2px' }}>S</span>}
-                              {shift.line_items?.public_holiday && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '1px 3px', borderRadius: '2px' }}>H</span>}
+                            <div style={{ fontSize: '0.65em', display: 'flex', flexWrap: 'wrap', gap: '1px' }}>
+                              {shift.line_items?.sleepover && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '0px 2px', borderRadius: '2px' }}>S</span>}
+                              {shift.line_items?.public_holiday && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '0px 2px', borderRadius: '2px' }}>H</span>}
                             </div>
                           )}
                         </div>
@@ -3947,6 +3968,8 @@ export default function CalendarClient() {
           flex-shrink: 0;
           border-right: 1px solid var(--border);
           padding-right: 8px;
+          display: flex;
+          flex-direction: column;
         }
 
         .cal-week-hour-label {
@@ -3958,6 +3981,7 @@ export default function CalendarClient() {
           font-size: 0.85em;
           color: var(--text-secondary);
           font-weight: 500;
+          flex-shrink: 0;
         }
 
         .cal-week-timeline-container {
@@ -3966,11 +3990,12 @@ export default function CalendarClient() {
           flex: 1;
           background-color: var(--border);
           padding: 0;
+          overflow-x: auto;
         }
 
         .cal-week-day-timeline {
           flex: 1;
-          min-width: 150px;
+          min-width: 160px;
           display: flex;
           flex-direction: column;
           background-color: var(--surface);
@@ -3983,6 +4008,7 @@ export default function CalendarClient() {
           border-bottom: 2px solid var(--border);
           color: var(--text);
           flex-shrink: 0;
+          font-size: 0.9em;
         }
 
         .cal-week-timeline-area {
@@ -3990,6 +4016,7 @@ export default function CalendarClient() {
           position: relative;
           height: 1440px;
           background-color: var(--surface);
+          border-right: 1px solid var(--border);
         }
 
         .cal-week-hour-line {
@@ -4002,8 +4029,6 @@ export default function CalendarClient() {
 
         .cal-week-shift-block {
           position: absolute;
-          left: 4px;
-          right: 4px;
           padding: 6px;
           border-radius: 4px;
           border-left: 4px solid;
@@ -4012,11 +4037,13 @@ export default function CalendarClient() {
           cursor: pointer;
           overflow: hidden;
           transition: opacity 0.2s;
-          font-size: 0.85em;
+          font-size: 0.80em;
+          line-height: 1.2;
         }
 
         .cal-week-shift-block:hover {
           opacity: 0.9;
+          z-index: 10;
         }
 
         .cal-button-group {
