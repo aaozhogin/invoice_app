@@ -937,6 +937,16 @@ export default function CalendarClient() {
     }
   }, [viewMode])
 
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [error])
+
   const inferShiftFlags = (shift: Shift) => {
     const joinedLineItem = (shift as any).line_items as any | null | undefined
     const liFromCodeId = lineItemCodes.find(li => li.id === String((shift as any).line_item_code_id ?? ''))
@@ -3327,7 +3337,7 @@ export default function CalendarClient() {
 
       {/* Error toast - appears on top of everything */}
       {error && !showShiftDialog && (
-        <div className="cal-error-toast">
+        <div className="cal-error-toast" onClick={() => setError(null)} style={{ cursor: 'pointer' }}>
           Error: {renderErrorMessage(error)}
         </div>
       )}
@@ -3797,7 +3807,7 @@ export default function CalendarClient() {
         <>
           {/* Error Toast - appears on top of dialog */}
           {error && (
-            <div className="cal-error-toast">
+            <div className="cal-error-toast" onClick={() => setError(null)} style={{ cursor: 'pointer' }}>
               Error: {renderErrorMessage(error)}
             </div>
           )}
