@@ -170,10 +170,13 @@ export default function ClientsClient() {
   };
 
   const handleDelete = async (id: number) => {
-    // Fetch associated shifts
+    // Fetch associated shifts with carer information
     const { data: shifts, error: shiftsError } = await supabase
       .from('shifts')
-      .select('*')
+      .select(`
+        *,
+        carers:carer_id(id, first_name, last_name)
+      `)
       .eq('client_id', id);
 
     if (shiftsError) {
@@ -481,7 +484,10 @@ export default function ClientsClient() {
                 <div className="shifts-list">
                   {deleteConfirmDialog.associatedShifts.map((shift: any) => (
                     <div key={shift.id} className="shift-item">
-                      <span>{new Date(shift.date_from).toLocaleDateString()} - {shift.shift_type || 'No type'}</span>
+                      <span>
+                        {new Date(shift.shift_date).toLocaleDateString()} - {shift.category || shift.shift_type || 'No type'} 
+                        {shift.carers && ` (${shift.carers.first_name} ${shift.carers.last_name})`}
+                      </span>
                     </div>
                   ))}
                 </div>

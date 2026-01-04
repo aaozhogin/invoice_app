@@ -65,7 +65,7 @@ const DEFAULT_CARER_COLORS = [
   '#6366f1', // Indigo
 ]
 
-const HOUR_HEIGHT = 60
+const HOUR_HEIGHT = 35
 const QUARTER_HOUR_HEIGHT = HOUR_HEIGHT / 4
 
 interface NewShift {
@@ -309,6 +309,7 @@ export default function CalendarClient() {
         const sunday = getSunday(currentDate)
         rangeFrom = toYmdLocal(monday)
         rangeTo = toYmdLocal(sunday)
+        console.log('📅 Week view date range:', { rangeFrom, rangeTo, currentDate: toYmdLocal(currentDate) })
       }
 
       // For the current day view, also load shifts from the previous day to catch overnight shifts
@@ -336,7 +337,7 @@ export default function CalendarClient() {
           *,
           carers(id, first_name, last_name, email, color),
           clients(id, first_name, last_name),
-          line_items(id, code, category, description, billed_rate)
+          line_items(id, code, category, description, billed_rate, sleepover, public_holiday)
         `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
       ])
 
@@ -404,15 +405,33 @@ export default function CalendarClient() {
         selectedClientId,
         totalShifts: rangeShiftsRes.data?.length,
         filteredShifts: filteredRangeShifts.length,
-        shiftClientIds: rangeShiftsRes.data?.map(s => ({ id: s.id, client_id: s.client_id }))
+        shiftClientIds: rangeShiftsRes.data?.map(s => ({ id: s.id, client_id: s.client_id })),
+        shiftDates: rangeShiftsRes.data?.slice(0, 3).map(s => ({ id: s.id, shift_date: s.shift_date, type: typeof s.shift_date })),
+        rangeShiftsDataSample: rangeShiftsRes.data?.slice(0, 3)
       })
       
       // Ensure rangeShifts have clients data joined (same as done for shifts)
-      const rangeShiftsWithClients = filteredRangeShifts.map(shift => ({
+      const rangeShiftsWithClients = (filteredRangeShifts || []).map(shift => ({
         ...shift,
-        clients: shift.client_id ? clientsMap.get(shift.client_id) : null
+        shift_date: typeof shift.shift_date === 'string' ? shift.shift_date : toYmdLocal(new Date(shift.shift_date)),
+        clients: shift.clients || (shift.client_id ? clientsMap.get(shift.client_id) : null)
       }))
       
+      console.log('📊 Week view shifts being set:', {
+        count: rangeShiftsWithClients.length,
+        selectedClientId,
+        rangeShiftsResDataLength: rangeShiftsRes.data?.length ?? 0,
+        sample: rangeShiftsWithClients.slice(0, 2).map(s => ({
+          id: s.id,
+          shift_date: s.shift_date,
+          carer: s.carers?.first_name,
+          client: s.clients?.first_name
+        }))
+      })
+      
+      // Always set rangeShifts - don't filter by client
+      // If no shifts match the client filter, just show unfiltered shifts
+      console.log('✅ Setting rangeShifts:', rangeShiftsWithClients.length, 'shifts (directly from result)')
       setRangeShifts(rangeShiftsWithClients)
 
       const { carerTotals, overlapSummary, overallTotals } = computeSidebarAggregates(filteredRangeShifts)
@@ -576,8 +595,16 @@ export default function CalendarClient() {
   }
 
   // Convert Y position to time (snap to 15-minute intervals)
-  const getTimeFromY = (y: number): string => {
-    const totalMinutes = (y / HOUR_HEIGHT) * 60
+  // Y is in pixels relative to timeline container, which has 100% height
+  const getTimeFromY = (y: number, containerHeight?: number): string => {
+    if (!containerHeight && timelineRef.current) {
+      containerHeight = timelineRef.current.getBoundingClientRect().height
+    }
+    containerHeight = containerHeight || 840 // fallback to default
+    
+    // Convert pixel Y to percentage, then to total minutes in day (1440 minutes)
+    const percentageOfDay = Math.max(0, Math.min(y / containerHeight, 1))
+    const totalMinutes = percentageOfDay * 1440
     const snappedMinutes = Math.round(totalMinutes / 15) * 15
     const hours = Math.floor(snappedMinutes / 60)
     const minutes = snappedMinutes % 60
@@ -657,8 +684,9 @@ export default function CalendarClient() {
     
     const rect = timelineRef.current.getBoundingClientRect()
     const y = e.clientY - rect.top
+    const maxY = rect.height
     
-    const constrainedY = Math.max(0, Math.min(y, HOUR_HEIGHT * 24))
+    const constrainedY = Math.max(0, Math.min(y, maxY))
     setDragEnd(constrainedY)
   }
 
@@ -667,20 +695,23 @@ export default function CalendarClient() {
 
     // Capture the final mouse position on mouse-up to avoid relying on a possibly stale dragEnd.
     let finalY = dragEnd
+    let containerHeight = 840
     if (timelineRef.current) {
       const rect = timelineRef.current.getBoundingClientRect()
       const y = e.clientY - rect.top
-      finalY = Math.max(0, Math.min(y, HOUR_HEIGHT * 24))
+      containerHeight = rect.height
+      finalY = Math.max(0, Math.min(y, containerHeight))
     }
 
     setIsDragging(false)
 
     const startY = Math.min(dragStart, finalY)
     const endY = Math.max(dragStart, finalY)
-    const adjustedEndY = Math.max(endY, startY + QUARTER_HOUR_HEIGHT)
+    const minShiftDuration = (containerHeight / 1440) * 15 // 15 minutes in pixels
+    const adjustedEndY = Math.max(endY, startY + minShiftDuration)
     
-    const startTime = getTimeFromY(startY)
-    const endTime = getTimeFromY(adjustedEndY)
+    const startTime = getTimeFromY(startY, containerHeight)
+    const endTime = getTimeFromY(adjustedEndY, containerHeight)
     
     setNewShift({
       shift_date: toYmdLocal(currentDate),
@@ -763,6 +794,7 @@ export default function CalendarClient() {
         currentDate: toYmdLocal(currentDate),
         mondayDate: toYmdLocal(getMonday(currentDate)),
         sundayDate: toYmdLocal(getSunday(currentDate)),
+        selectedClientId,
         sampleShifts: rangeShifts.slice(0, 3).map(s => ({
           id: s.id,
           shift_date: s.shift_date,
@@ -783,6 +815,36 @@ export default function CalendarClient() {
       }
     }
   }, [viewMode, rangeShifts, currentDate])
+
+  // Update document title based on view mode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const newTitle = viewMode === 'week' ? 'Calendar - Week View' : 'Calendar - Day View'
+      console.log(`📝 Setting page title to: ${newTitle}`)
+      document.title = newTitle
+    }
+  }, [viewMode])
+
+  const inferShiftFlags = (shift: Shift) => {
+    const joinedLineItem = (shift as any).line_items as any | null | undefined
+    const liFromCodeId = lineItemCodes.find(li => li.id === String((shift as any).line_item_code_id ?? ''))
+
+    const isSleepover =
+      Boolean((shift as any).is_sleepover) || Boolean(joinedLineItem?.sleepover) || Boolean(liFromCodeId?.sleepover)
+    const isPublicHoliday =
+      Boolean((shift as any).is_public_holiday) ||
+      Boolean(joinedLineItem?.public_holiday) ||
+      Boolean(liFromCodeId?.public_holiday)
+
+    return { isSleepover, isPublicHoliday }
+  }
+
+  const getFontScaleForDurationMinutes = (durationMinutes: number) => {
+    if (!Number.isFinite(durationMinutes)) return 1
+    if (durationMinutes <= 45) return 0.5
+    if (durationMinutes <= 60) return 0.7
+    return 1
+  }
 
   const isoToLocalHhmm = (iso: string): string => {
     const dt = new Date(iso)
@@ -2169,6 +2231,8 @@ export default function CalendarClient() {
       final_client_id: clientId
     })
 
+    const { isSleepover, isPublicHoliday } = inferShiftFlags(shift)
+
     const newShiftData = {
       shift_date: shift.shift_date,
       start_time: fromTimeString,
@@ -2177,8 +2241,8 @@ export default function CalendarClient() {
       client_id: clientId,
       category: selectedCategory,
       line_item_code_id: selectedLineItemId,
-      is_sleepover: Boolean((shift as any).is_sleepover),
-      is_public_holiday: Boolean((shift as any).is_public_holiday),
+      is_sleepover: isSleepover,
+      is_public_holiday: isPublicHoliday,
       hireup_cost: selectedCategory === 'HIREUP' ? Number(shift.cost ?? 0) || null : null
     }
     
@@ -2475,7 +2539,7 @@ export default function CalendarClient() {
       {!isLoading && clients.length > 0 && carers.length > 0 && lineItemCodes.length > 0 && (
         <>
       <div className="cal-header">
-        <h1>Calendar - Day View</h1>
+        <h1>{viewMode === 'week' ? 'Calendar - Week View' : 'Calendar - Day View'}</h1>
 
         <div className="cal-range-controls">
           <label className="cal-range-field">
@@ -2595,7 +2659,11 @@ export default function CalendarClient() {
             {viewMode === 'day' ? 'Today' : 'Current Week'}
           </button>
           <button 
-            onClick={() => setViewMode(viewMode === 'day' ? 'week' : 'day')}
+            onClick={() => {
+              const newMode = viewMode === 'day' ? 'week' : 'day'
+              console.log(`🔘 Switching view from ${viewMode} to ${newMode}`)
+              setViewMode(newMode)
+            }}
             className="view-toggle-btn"
           >
             {viewMode === 'day' ? 'Week View' : 'Day View'}
@@ -2830,7 +2898,6 @@ export default function CalendarClient() {
       {viewMode === 'week' ? (
         // Week View with Timeline
         <>
-          {typeof window !== 'undefined' && (console.log('📺 Rendering WEEK view with', rangeShifts.length, 'shifts'), null)}
           <div className="cal-week-view">
           <div className="cal-week-hours-column">
             {hours.map((hour, index) => (
@@ -2846,7 +2913,14 @@ export default function CalendarClient() {
               dayDate.setDate(dayDate.getDate() + i);
               const dayYmd = toYmdLocal(dayDate);
               const dayShifts = rangeShifts
-                .filter(s => s.shift_date === dayYmd)
+                .filter(s => {
+                  // Match shifts by shift_date (database field, may be off by 1 day)
+                  // OR by time_from date (actual start date)
+                  const fromTime = new Date(s.time_from)
+                  const timeFromDate = toYmdLocal(fromTime)
+                  
+                  return s.shift_date === dayYmd || timeFromDate === dayYmd
+                })
                 .sort((a, b) => a.time_from.localeCompare(b.time_from));
               
               return (
@@ -2857,12 +2931,12 @@ export default function CalendarClient() {
                   
                   <div className="cal-week-timeline-area">
                     {Array.from({ length: 24 }, (_, i) => (
-                      <div key={i} className="cal-week-hour-line" style={{ top: `${i * HOUR_HEIGHT}px` }} />
+                      <div key={i} className="cal-week-hour-line" style={{ top: `${(i / 24) * 100}%` }} />
                     ))}
                     
                     {dayShifts.length === 0 && (
                       <div style={{ padding: '12px', color: 'var(--text-secondary)', fontSize: '0.85em' }}>
-                        No shifts
+                        No shifts for this day
                       </div>
                     )}
                     
@@ -2871,7 +2945,13 @@ export default function CalendarClient() {
                       const span = getLocalSpanMinutesForShift(shift);
                       const startMinutes = span.startMin;
                       const endMinutes = span.endMin;
-                      const displayHeight = Math.max(endMinutes - startMinutes, 60);
+
+                      const durationMinutes = Math.max(0, endMinutes - startMinutes)
+                      const fontScale = getFontScaleForDurationMinutes(durationMinutes)
+                      
+                      // Convert minutes to percentage of day (1440 minutes = 100%)
+                      const topPercent = (startMinutes / 1440) * 100;
+                      const heightPercent = ((endMinutes - startMinutes) / 1440) * 100;
                       
                       // Get display times for the shift (handling overnight)
                       const from = new Date(shift.time_from);
@@ -2891,39 +2971,64 @@ export default function CalendarClient() {
                       const shiftWidth = (100 / overlapCount) - 1;
                       const shiftLeft = overlapIndex * (100 / overlapCount);
                       
+                      // Convert hex to rgba for consistent opacity
+                      const carerColor = shift.carers?.color || '#3b82f6';
+                      const hexToRgba = (hex: string, alpha: number = 0.7) => {
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                      };
+                      
+                      // Check for special shift types
+                      const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
+                      const { isSleepover: isSleepoverShift, isPublicHoliday: isPublicHolidayShift } = inferShiftFlags(shift)
+                      
+                      const highlightColor = isHireup
+                        ? '#dc2626'
+                        : isSleepoverShift
+                          ? '#7c3aed'
+                          : isPublicHolidayShift
+                            ? '#16a34a'
+                            : null
+                      
+                      const borderStyle = highlightColor ? `2px solid ${highlightColor}` : `1px solid rgba(200,200,200,0.2)`
+                      const shadowStyle = highlightColor ? `0 0 0 2px ${highlightColor}` : 'none'
+                      
                       return (
                         <div
                           key={shift.id}
                           className="cal-week-shift-block"
                           style={{
-                            top: `${startMinutes}px`,
-                            height: `${displayHeight}px`,
+                            top: `${topPercent}%`,
+                            height: `${heightPercent}%`,
                             left: `${shiftLeft}%`,
                             width: `${shiftWidth}%`,
-                            backgroundColor: shift.carers?.color || '#3b82f6',
-                            borderLeftColor: shift.carers?.color || '#3b82f6',
-                            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
+                            backgroundColor: hexToRgba(carerColor, 0.7),
+                            border: borderStyle,
+                            boxShadow: shadowStyle,
+                            fontSize: `${fontScale}em`
                           }}
                           onClick={() => {
-                            setEditingShift(shift);
-                            setShowShiftDialog(true);
+                            handleEditShift(shift)
                           }}
                         >
-                          <div style={{ fontWeight: 600, fontSize: '0.85em', marginBottom: '2px' }}>
-                            {startTime} - {endTime}
+                          <div style={{ fontWeight: 700, fontSize: '0.85em', marginBottom: '2px', lineHeight: 1.2 }}>
+                            {startTime}-{endTime}: {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''}
                           </div>
-                          <div style={{ fontSize: '0.75em', marginBottom: '1px' }}>
-                            {shift.carers?.first_name}
+                          <div style={{ fontSize: '0.75em', marginBottom: '2px', lineHeight: 1.2 }}>
+                            ${(shift.cost || 0).toFixed(2)}
+                            {(isSleepoverShift || isPublicHolidayShift || isHireup) && (
+                              <>
+                                {' '}
+                                {isSleepoverShift ? '(SLEEPOVER)' : ''}
+                                {isSleepoverShift && isPublicHolidayShift ? ' ' : ''}
+                                {isPublicHolidayShift ? '(PUBLIC HOLIDAY)' : ''}
+                                {(isSleepoverShift || isPublicHolidayShift) && isHireup ? ' ' : ''}
+                                {isHireup ? '(HIREUP)' : ''}
+                              </>
+                            )}
                           </div>
-                          {shift.clients && <div style={{ fontSize: '0.7em', opacity: 0.9, marginBottom: '1px' }}>{shift.clients.first_name}</div>}
-                          {shift.line_items && <div style={{ fontSize: '0.7em', opacity: 0.85, marginBottom: '1px' }}>{shift.line_items.code}</div>}
-                          <div style={{ fontSize: '0.7em', marginBottom: '1px' }}>${(shift.cost || 0).toFixed(2)}</div>
-                          {(shift.line_items?.sleepover || shift.line_items?.public_holiday) && (
-                            <div style={{ fontSize: '0.65em', display: 'flex', flexWrap: 'wrap', gap: '1px' }}>
-                              {shift.line_items?.sleepover && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '0px 2px', borderRadius: '2px' }}>S</span>}
-                              {shift.line_items?.public_holiday && <span style={{ backgroundColor: 'rgba(255,255,255,0.3)', padding: '0px 2px', borderRadius: '2px' }}>H</span>}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -2953,7 +3058,7 @@ export default function CalendarClient() {
           onMouseUp={handleMouseUp}
         >
           {Array.from({ length: 24 }, (_, i) => (
-            <div key={i} className="cal-hour-line" style={{ top: i * HOUR_HEIGHT }} />
+            <div key={i} className="cal-hour-line" style={{ top: `${(i / 24) * 100}%` }} />
           ))}
           
           {Array.from({ length: 24 * 4 }, (_, i) => (
@@ -2961,7 +3066,7 @@ export default function CalendarClient() {
               key={i} 
               className="cal-quarter-line" 
               style={{ 
-                top: i * QUARTER_HOUR_HEIGHT,
+                top: `${(i / (24 * 4)) * 100}%`,
                 opacity: i % 4 === 0 ? 1 : 0.3
               }} 
             />
@@ -3003,7 +3108,7 @@ export default function CalendarClient() {
                   processedShifts.push({
                     shift,
                     displayStartTime: startTime,
-                    displayEndTime: '23:59',
+                    displayEndTime: '00:00',
                     isOvernightPart: 'today'
                   })
                 }
@@ -3039,8 +3144,20 @@ export default function CalendarClient() {
               const { shift, displayStartTime, displayEndTime, isOvernightPart } = item
               
               const startY = getYFromTime(`2000-01-01 ${displayStartTime}:00`)
-              const endY = getYFromTime(`2000-01-01 ${displayEndTime}:00`)
-            const height = Math.max(endY - startY, QUARTER_HOUR_HEIGHT)
+              const endY =
+                isOvernightPart === 'today' && displayEndTime === '00:00'
+                  ? 1440
+                  : getYFromTime(`2000-01-01 ${displayEndTime}:00`)
+
+              const durationMinutes = Math.max(0, endY - startY)
+              const fontScale = getFontScaleForDurationMinutes(durationMinutes)
+              const baseTileFontPx = 20.4 * fontScale
+              const line1FontPx = 22.1 * fontScale
+              const line2FontPx = 20.4 * fontScale
+              
+              // Convert minutes to percentage of day (1440 minutes = 100%)
+              const topPercent = (startY / 1440) * 100
+              const heightPercent = ((endY - startY) / 1440) * 100
 
             // For split overnight shifts, use a unique layout key per part
             // But for the layout map lookup, we always use the shift ID since layout is per shift
@@ -3055,14 +3172,10 @@ export default function CalendarClient() {
             
             // Check if this is a HIREUP shift
             const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
-            const isPublicHolidayShift = Boolean((shift as any).is_public_holiday)
-            const isSleepoverShift = Boolean((shift as any).is_sleepover)
-            console.log('🔍 Shift HIREUP check:', { 
-              shiftId: shift.id, 
-              lineItemsCategory: ((shift as any).line_items as any)?.category,
-              shiftCategory: (shift as any).category,
-              isHireup 
-            })
+            const { isSleepover: isSleepoverShift, isPublicHoliday: isPublicHolidayShift } = inferShiftFlags(shift)
+
+            const displayCategory = (shift as any).category || (shift as any).line_items?.category || 'Unknown Category'
+            const displayDescription = (shift as any).line_items?.description || displayCategory
             
             // Convert hex to rgba for background
             const hexToRgba = (hex: string, alpha: number = 0.7) => {
@@ -3083,7 +3196,7 @@ export default function CalendarClient() {
                   ? '#16a34a'
                   : null
 
-            const borderStyle = highlightColor ? `0.5px solid ${highlightColor}` : `2px solid ${carerColor}`
+            const borderStyle = highlightColor ? `0.5px solid ${highlightColor}` : `2px solid ${hexToRgba(carerColor, 0.5)}`
             const shadowStyle = highlightColor ? `0 0 0 1px ${highlightColor}, inset 0 0 0 1px ${highlightColor}` : 'none'
 
             return (
@@ -3093,24 +3206,24 @@ export default function CalendarClient() {
                 className="shift-rectangle"
                 style={{
                   position: 'absolute',
-                  top: startY,
+                  top: `${topPercent}%`,
                   left: `calc(${leftPct}% + 8px)`,
                   right: `calc(${rightPct}% + 8px)`,
-                  height: height,
-                  background: hexToRgba(carerColor, 0.7),
+                  height: `${heightPercent}%`,
+                  background: hexToRgba(carerColor, 0.5),
                   border: borderStyle,
                   boxShadow: shadowStyle,
                   borderRadius: '4px',
                   padding: '4px 8px',
                   color: '#fff',
-                  fontSize: '12px',
+                  fontSize: `${baseTileFontPx}px`,
                   fontWeight: '600',
                   zIndex: 5,
                   overflow: 'hidden',
                   cursor: dragState.isDragging || dragState.isResizing ? 'grabbing' : 'grab',
                   userSelect: 'none'
                 }}
-                title={`${shift.carers?.first_name || 'Unknown'} ${shift.carers?.last_name || ''} - ${shift.line_items?.category || 'Unknown'} - $${shift.cost?.toFixed(2) || '0.00'}${isOvernightPart !== 'full' ? ' (overnight shift)' : ''}`}
+                title={`${shift.carers?.first_name || 'Unknown'} ${shift.carers?.last_name || ''} - ${displayCategory} - $${shift.cost?.toFixed(2) || '0.00'}${isOvernightPart !== 'full' ? ' (overnight shift)' : ''}`}
                 onMouseDown={(e) => handleShiftMouseDown(e, shift, 'move')}
                 onClick={(e) => {
                   // Only trigger edit if we're not in the middle of a drag operation
@@ -3140,34 +3253,33 @@ export default function CalendarClient() {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   pointerEvents: 'none',
-                  fontSize: '13px',
+                  fontSize: `${line1FontPx}px`,
                   fontWeight: 700
                 }}>
-                  {shift.carers?.first_name || 'Unknown'} {shift.carers?.last_name || ''} · ${(shift.cost || 0).toFixed(2)}
+                  {displayStartTime} - {displayEndTime}, {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''} - ${(shift.cost || 0).toFixed(2)}
+                  {(isSleepoverShift || isPublicHolidayShift || isHireup) && (
+                    <>
+                      {' '}
+                      {isSleepoverShift ? '(SLEEPOVER)' : ''}
+                      {isSleepoverShift && isPublicHolidayShift ? ' ' : ''}
+                      {isPublicHolidayShift ? '(PUBLIC HOLIDAY)' : ''}
+                      {(isSleepoverShift || isPublicHolidayShift) && isHireup ? ' ' : ''}
+                      {isHireup ? '(HIREUP)' : ''}
+                    </>
+                  )}
                 </div>
-                <div style={{
-                  fontSize: '12px',
-                  opacity: 0.95,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  pointerEvents: 'none'
-                }}>
-                  {displayStartTime}-{displayEndTime} · {shiftHours.toFixed(2)}h
-                </div>
-                <div style={{
-                  fontSize: '11px',
-                  opacity: 0.9,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  pointerEvents: 'none'
-                }}>
-                  {shift.line_item_code_id
-                    ? `${shift.line_items?.code ? `${shift.line_items.code} - ` : ''}${shift.line_items?.description || shift.line_items?.category || 'Unknown Category'}`
-                    : 'Multiple Line Items - ' + (shift.line_items?.category || 'Unknown Category')}
-                  {isSleepoverShift ? ' (Sleepover)' : ''}{isPublicHolidayShift ? ' (Public Holiday)' : ''}
-                </div>
+                {!isHireup && (
+                  <div style={{
+                    fontSize: `${line2FontPx}px`,
+                    opacity: 0.95,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    pointerEvents: 'none'
+                  }}>
+                    {`${shift.line_items?.code || displayCategory}: ${shift.line_items?.description || displayDescription}`}
+                  </div>
+                )}
                 
                 {/* Bottom resize handle */}
                 <div
@@ -3319,10 +3431,11 @@ export default function CalendarClient() {
               <input
                 type="text"
                 readOnly
-                value={selectedClientId && clients.find(c => c.id === selectedClientId) 
-                  ? `${clients.find(c => c.id === selectedClientId)?.first_name} ${clients.find(c => c.id === selectedClientId)?.last_name}` 
-                  : ''}
-                style={{ backgroundColor: '#f0f0f0', cursor: 'not-allowed', color: '#333', opacity: 1 }}
+                value={(() => {
+                  const clientId = newShift.client_id ?? selectedClientId
+                  const client = clientId ? clients.find((c) => c.id === clientId) : null
+                  return client ? `${client.first_name} ${client.last_name}` : '—'
+                })()}
               />
             </div>
 
@@ -3463,14 +3576,13 @@ export default function CalendarClient() {
         }
 
         .calendar-container {
-          padding: 20px;
+          padding: 10px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           height: 100vh;
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: 8px;
           overflow: hidden;
-          padding-bottom: 80px; /* keep content clear of fixed footer */
           box-sizing: border-box;
         }
 
@@ -3534,14 +3646,14 @@ export default function CalendarClient() {
 
         .cal-main-container {
           display: flex;
-          border: 1px solid #e0e0e0;
+          border: 1px solid var(--border);
           border-radius: 8px;
-          background: white;
+          background: var(--card);
           flex: 1;
           min-height: 0;
-          overflow-y: auto;
-          padding-bottom: 120px; /* leave ample scroll space above fixed footer */
+          overflow: hidden;
           overflow-x: hidden;
+          height: 100%;
         }
 
         .cal-footer {
@@ -3638,30 +3750,40 @@ export default function CalendarClient() {
 
         .cal-hours-column {
           width: 80px;
-          background: #f8f9fa;
-          border-right: 1px solid #e0e0e0;
+          background: var(--surface);
+          border-right: 1px solid var(--border);
           flex-shrink: 0;
-          height: ${HOUR_HEIGHT * 24}px;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          overflow: hidden;
+          transform: scaleY(0.88);
+          transform-origin: top;
         }
 
         .cal-hour-label {
-          height: ${HOUR_HEIGHT}px;
+          flex: 1;
+          min-height: 0;
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           justify-content: center;
-          font-size: 12px;
-          color: #666;
+          font-size: 20px;
+          color: var(--muted);
           font-weight: 500;
-          border-bottom: 1px solid #e0e0e0;
+          border-bottom: 1px solid var(--border);
+          padding-top: 1px;
+          white-space: nowrap;
         }
 
         .cal-timeline-area {
           flex: 1;
           position: relative;
-          height: ${HOUR_HEIGHT * 24}px;
+          height: 100%;
           cursor: crosshair;
-          background: #fafbfc;
+          background: var(--card);
           user-select: none;
+          transform: scaleY(0.88);
+          transform-origin: top;
         }
 
         .cal-hour-line {
@@ -3669,7 +3791,7 @@ export default function CalendarClient() {
           left: 0;
           right: 0;
           height: 1px;
-          background: #d1d5db;
+          background: var(--border);
           z-index: 2;
           pointer-events: none;
         }
@@ -3679,7 +3801,7 @@ export default function CalendarClient() {
           left: 0;
           right: 0;
           height: 1px;
-          background: #e5e7eb;
+          background: rgba(255, 255, 255, 0.05);
           z-index: 1;
           pointer-events: none;
         }
@@ -3813,6 +3935,22 @@ export default function CalendarClient() {
           border: 1px solid #d1d5db;
           border-radius: 6px;
           font-size: 14px;
+        }
+
+        .cal-form-group input {
+          width: 100%;
+          padding: 10px;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          font-size: 14px;
+          box-sizing: border-box;
+        }
+
+        .cal-form-group input[readonly] {
+          background: #f3f4f6;
+          color: #111827;
+          cursor: not-allowed;
+          opacity: 1;
         }
 
         .cal-cost-display {
@@ -4081,7 +4219,7 @@ export default function CalendarClient() {
           cursor: pointer;
           overflow: hidden;
           transition: opacity 0.2s;
-          font-size: 0.80em;
+          font-size: 1.04em;
           line-height: 1.2;
           box-sizing: border-box;
           z-index: 5;

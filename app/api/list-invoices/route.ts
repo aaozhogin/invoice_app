@@ -27,7 +27,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ data }, { status: 200 })
+    // Calculate total amount for each invoice by summing shift costs
+    const invoicesWithTotals = await Promise.all((data || []).map(async (invoice: any) => {
+      const { data: shifts, error: shiftsError } = await supabase
+        .from('shifts')
+        .select('cost')
+        .eq('carer_id', invoice.carer_id)
+        .eq('client_id', invoice.client_id)
+        .gte('shift_date', invoice.date_from)
+        .lte('shift_date', invoice.date_to)
+
+      if (shiftsError) {
+        console.error('Error fetching shifts for invoice:', shiftsError)
+        return { ...invoice, total_amount: 0 }
+      }
+
+      const total = (shifts || []).reduce((sum: number, shift: any) => sum + (shift.cost || 0), 0)
+      return { ...invoice, total_amount: total }
+    }))
+
+    return NextResponse.json({ data: invoicesWithTotals }, { status: 200 })
   } catch (err) {
     console.error('Error fetching invoices:', err)
     return NextResponse.json({ error: 'Failed to fetch invoices.' }, { status: 500 })

@@ -15,6 +15,7 @@ interface InvoiceRecord {
   created_at: string
   carers: { id: number; first_name: string; last_name: string } | null
   clients: { id: number; first_name: string; last_name: string } | null
+  total_amount?: number
 }
 
 export default function InvoicesClient() {
@@ -221,7 +222,7 @@ export default function InvoicesClient() {
                     {formatDateTime(invoice.created_at)}
                   </td>
                   <td style={{ padding: '1rem', color: '#e2e8f0', borderRight: '1px solid #334155', fontWeight: '500', textAlign: 'right' }}>
-                    $0.00
+                    ${(invoice.total_amount || 0).toFixed(2)}
                   </td>
                   <td style={{ padding: '1rem', textAlign: 'center', borderRight: '1px solid #334155' }}>
                     <button
