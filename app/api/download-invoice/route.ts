@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Invoice not found.' }, { status: 404 })
     }
 
-    const invoice = invoices[0]
+    const invoice = invoices[0] as Database['public']['Tables']['invoices']['Row']
 
     // Regenerate the invoice by calling the generate-invoice endpoint internally
     // This ensures we get the same format as originally generated

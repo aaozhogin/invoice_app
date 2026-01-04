@@ -14,6 +14,7 @@ interface Shift {
   line_item_code_id: number
   cost: number
   shift_date: string
+  category?: string | null
   created_at?: string
   updated_at?: string
   // Relations
@@ -726,7 +727,8 @@ export default function CalendarClient() {
     const counts = new Map<number, number>()
     // Filter out HIREUP shifts when counting carer shifts
     for (const shift of rangeShifts) {
-      if (shift.category !== 'HIREUP') {
+      const category = shift.category as string | null | undefined
+      if (!category || category !== 'HIREUP') {
         counts.set(shift.carer_id, (counts.get(shift.carer_id) || 0) + 1)
       }
     }
@@ -990,15 +992,19 @@ export default function CalendarClient() {
     const dfs = (node: number, component: number[]) => {
       visited.add(node)
       component.push(node)
-      for (const neighbor of graph.get(node)!) {
-        if (!visited.has(neighbor)) {
-          dfs(neighbor, component)
+      const neighbors = graph.get(node)
+      if (neighbors) {
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            dfs(neighbor, component)
+          }
         }
       }
     }
     
     for (let i = 0; i < items.length; i++) {
-      if (!visited.has(i) && graph.get(i)!.size > 0) {
+      const nodeNeighbors = graph.get(i)
+      if (!visited.has(i) && nodeNeighbors && nodeNeighbors.size > 0) {
         const component: number[] = []
         dfs(i, component)
         components.push(component)
@@ -1243,8 +1249,8 @@ export default function CalendarClient() {
         continue
       }
 
-      let liStart = parseToMinutes(li.time_from)
-      let liEnd = parseToMinutes(li.time_to)
+      let liStart = parseToMinutes(li.time_from || '00:00')
+      let liEnd = parseToMinutes(li.time_to || '23:59')
 
       if (liEnd <= liStart) {
         // Wrap-around window (e.g. 22:00-02:00)
@@ -1624,8 +1630,8 @@ export default function CalendarClient() {
           continue
         }
 
-        let liStart = parseToMinutes(li.time_from)
-        let liEnd = parseToMinutes(li.time_to)
+        let liStart = parseToMinutes(li.time_from || '00:00')
+        let liEnd = parseToMinutes(li.time_to || '23:59')
 
         // handle wrap-around (e.g., 20:00 -> 00:00)
         if (liEnd <= liStart) {
@@ -1756,7 +1762,8 @@ export default function CalendarClient() {
           .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
       })()
 
-      if (!lineItem && newShift.category !== 'HIREUP') {
+      const category = newShift.category as string | null | undefined
+      if (!lineItem && category && category !== 'HIREUP') {
         if (newShift.is_sleepover) setError('No sleepover line item found for the selected category/day')
         else if (newShift.is_public_holiday) setError('No public holiday line item found for the selected category/day')
         else setError('There are no line item codes for this category covering the selected time frame. Please [add line item code] or select another time for the shift')
@@ -2060,8 +2067,8 @@ export default function CalendarClient() {
     });
 
     // Handle category - prefer category stored directly on shift (for HIREUP), fallback to line item
-    let selectedLineItemId = null
-    let selectedCategory = null
+    let selectedLineItemId: string | number | null = null
+    let selectedCategory: string | null = null
     
     // Check if shift has category stored directly (HIREUP case)
     if ((shift as any).category) {
@@ -2850,8 +2857,8 @@ export default function CalendarClient() {
             const height = Math.max(endY - startY, QUARTER_HOUR_HEIGHT)
 
             // For split overnight shifts, use a unique layout key per part
-            const layoutKey = isOvernightPart !== 'full' ? `${shift.id}-${isOvernightPart}` : shift.id
-            const layout = dayLayout.get(layoutKey) || { col: 0, colCount: 1 }
+            // But for the layout map lookup, we always use the shift ID since layout is per shift
+            const layout = dayLayout.get(shift.id) || { col: 0, colCount: 1 }
             const pct = 100 / Math.max(1, layout.colCount)
             const leftPct = layout.col * pct
             const rightPct = (layout.colCount - layout.col - 1) * pct

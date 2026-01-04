@@ -32,6 +32,7 @@ function findHeaderRow(sheet: ExcelJS.Worksheet, headers: string[]): number | nu
   for (let i = 1; i <= sheet.rowCount; i++) {
     const row = sheet.getRow(i)
     const values = row.values
+    if (!Array.isArray(values) || values.length === 0) continue
     const hasAll = headers.every(header =>
       values.some(v => typeof v === 'string' && v.toLowerCase().includes(header.toLowerCase()))
     )
@@ -75,16 +76,18 @@ export async function POST(req: Request) {
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-    const { data: carers, error: carerError } = await supabase
+    const { data: carersData, error: carerError } = await supabase
       .from('carers')
       .select('*')
       .in('id', carerIds)
 
-    if (carerError || !carers?.length) {
+    if (carerError || !carersData?.length) {
       return NextResponse.json({ error: 'Carer not found.' }, { status: 404 })
     }
 
-    const { data: shifts, error: shiftError } = await supabase
+    const carers = carersData as Database['public']['Tables']['carers']['Row'][]
+
+    const { data: shiftsData, error: shiftError } = await supabase
       .from('shifts')
       .select(`
         id,
@@ -111,9 +114,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to load shifts.' }, { status: 500 })
     }
 
-    const { data: client } = clientId
+    // Type assertion for shifts with relations
+    const shifts = shiftsData as Array<{
+      id: number
+      shift_date: string
+      time_from: string
+      time_to: string
+      cost: number | null
+      carer_id: number
+      line_item_code_id: number | null
+      category: string | null
+      clients: { id: number; first_name: string; last_name: string; address: string | null; ndis_number: string | null } | null
+      line_items: { id: number; code: string | null; description: string | null; billed_rate: number | null } | null
+    }> | null
+
+    const { data: clientData } = clientId
       ? await supabase.from('clients').select('*').eq('id', clientId).maybeSingle()
       : { data: null }
+
+    const client = clientData as Database['public']['Tables']['clients']['Row'] | null
 
     const carerById = new Map(carers.map(c => [c.id, c]))
 
@@ -124,8 +143,9 @@ export async function POST(req: Request) {
     const templatePath = path.join(process.cwd(), templateFilename)
     
     const workbook = new ExcelJS.Workbook()
-    const templateBuffer = await fs.readFile(templatePath)
-    await workbook.xlsx.load(templateBuffer)
+    const templateData = await fs.readFile(templatePath)
+    // @ts-ignore - Buffer type mismatch between Node.js and ExcelJS
+    await workbook.xlsx.load(templateData)
     const sheet = workbook.worksheets[0]
     const dueDate = (() => {
       const d = new Date(invoiceDate)
@@ -141,7 +161,6 @@ export async function POST(req: Request) {
     const clientAddr1 = clientAddressLines[0] || clientAddress
     const clientAddr2 = clientAddressLines[1] || ''
     const replacements: Record<string, string> = {
-      'CARER\'S NAME': primaryCarer ? `${primaryCarer.first_name} ${primaryCarer.last_name}` : '',
       "CARER'S NAME": primaryCarer ? `${primaryCarer.first_name} ${primaryCarer.last_name}` : '',
       "CARER'S ADDRESS LINE 1": primaryCarer?.address || '',
       "CARER'S ADDRESS LINE 2": '',
@@ -227,6 +246,7 @@ export async function POST(req: Request) {
           }
           
           const imageId = workbook.addImage({
+            // @ts-ignore - Buffer type mismatch between Node.js and ExcelJS
             buffer: buf,
             extension: logoExtension
           })
@@ -246,7 +266,8 @@ export async function POST(req: Request) {
     const headerRowNumber = (() => {
       for (let i = 1; i <= sheet.rowCount; i++) {
         const row = sheet.getRow(i)
-        const values = row.values || []
+        const values = row.values
+        if (!Array.isArray(values) || values.length === 0) continue
         const hasDateCol = values.some(v => typeof v === 'string' && v.toLowerCase().includes('date'))
         const hasTimeCol = values.some(v => typeof v === 'string' && v.toLowerCase().includes('time'))
         if (hasDateCol && hasTimeCol) return i
@@ -331,26 +352,12 @@ export async function POST(req: Request) {
         const row = sheet.getRow(dataStartRow + idx)
         const rowNumber = dataStartRow + idx
         
-        // Helper to check if cells are already merged
-        const isMerged = (range: string) => {
-          try {
-            const existing = sheet._merges[range]
-            return !!existing
-          } catch {
-            return false
-          }
-        }
-        
-        // Merge cells F-G (Description) and J-K (Unit Price) for this row if not already merged
+        // Merge cells F-G (Description) and J-K (Unit Price) for this row
         const fgRange = `F${rowNumber}:G${rowNumber}`
         const jkRange = `J${rowNumber}:K${rowNumber}`
         
-        if (!isMerged(fgRange)) {
-          try { sheet.mergeCells(fgRange) } catch (e) { /* already merged */ }
-        }
-        if (!isMerged(jkRange)) {
-          try { sheet.mergeCells(jkRange) } catch (e) { /* already merged */ }
-        }
+        try { sheet.mergeCells(fgRange) } catch (e) { /* already merged */ }
+        try { sheet.mergeCells(jkRange) } catch (e) { /* already merged */ }
         
         // Column B: DOW formula
         row.getCell(2).value = { formula: `TEXT(C${rowNumber},"ddd")` }
@@ -435,10 +442,10 @@ export async function POST(req: Request) {
             const isLast = r === g.end
             for (let col = 2; col <= 12; col++) {
               const cell = row.getCell(col)
-              const topBorder = isFirst ? { style: 'medium' } : { style: 'thin' }
-              const bottomBorder = isLast ? { style: 'medium' } : { style: 'thin' }
-              const leftBorder = col === 2 ? { style: 'medium' } : (col === 3 ? { style: 'thin' } : { style: 'thin' })
-              const rightBorder = col === 12 ? { style: 'medium' } : (col === 2 ? { style: 'medium' } : { style: 'thin' })
+              const topBorder = isFirst ? { style: 'medium' as const } : { style: 'thin' as const }
+              const bottomBorder = isLast ? { style: 'medium' as const } : { style: 'thin' as const }
+              const leftBorder = col === 2 ? { style: 'medium' as const } : (col === 3 ? { style: 'thin' as const } : { style: 'thin' as const })
+              const rightBorder = col === 12 ? { style: 'medium' as const } : (col === 2 ? { style: 'medium' as const } : { style: 'thin' as const })
               cell.border = { top: topBorder, bottom: bottomBorder, left: leftBorder, right: rightBorder }
             }
             row.commit()
@@ -488,13 +495,13 @@ export async function POST(req: Request) {
       
       // Clear borders for totals row first
       for (let col = 1; col <= sheet.columnCount; col++) {
-        totalsRow.getCell(col).border = undefined
+        totalsRow.getCell(col).border = {}
       }
       // Step 3: B-L top border thick
       for (let col = 2; col <= 12; col++) {
         const cell = totalsRow.getCell(col)
         cell.border = {
-          top: { style: 'medium' },
+          top: { style: 'medium' as const },
           bottom: undefined,
           left: undefined,
           right: undefined
@@ -531,7 +538,8 @@ export async function POST(req: Request) {
     // Save invoice record to database
     let invoiceRecord: any = null
     try {
-      const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+      // Use any to bypass type checking issues with invoices table
+      const supabase: any = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
       
       const { data, error: invoiceError } = await supabase
         .from('invoices')

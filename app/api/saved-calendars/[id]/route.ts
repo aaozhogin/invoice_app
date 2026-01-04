@@ -11,13 +11,14 @@ function getServerSupabase() {
   return createClient<Database>(supabaseUrl, supabaseKey)
 }
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = getServerSupabase()
     const { data, error } = await supabase
       .from('saved_calendars')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (error) throw error
@@ -30,13 +31,14 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = getServerSupabase()
     const { error } = await supabase
       .from('saved_calendars')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
 
     if (error) throw new Error(error.message || 'Unknown Supabase error')
 

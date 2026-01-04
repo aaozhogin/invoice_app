@@ -158,8 +158,7 @@ export default function InvoicesClient() {
               {invoices.map((invoice) => (
                 <tr key={invoice.id} style={{
                   borderBottom: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  ':hover': { backgroundColor: '#1e293b' }
+                  backgroundColor: '#0f172a'
                 }}>
                   <td style={{ padding: '1rem', color: '#e2e8f0', borderRight: '1px solid #334155', fontWeight: '500' }}>
                     {invoice.invoice_number}

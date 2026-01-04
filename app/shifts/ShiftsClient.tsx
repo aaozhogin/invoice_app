@@ -737,7 +737,7 @@ export default function ShiftsClient() {
               {costBreakdown.length > 0 && (
                 <div className="cost-breakdown">
                   <h3>Cost Breakdown</h3>
-                  <table className="breakdown-table" border="0" style={{ border: 'none' }}>
+                  <table className="breakdown-table" border={0} style={{ border: 'none' }}>
                     <thead>
                       <tr>
                         <th>Description</th>
