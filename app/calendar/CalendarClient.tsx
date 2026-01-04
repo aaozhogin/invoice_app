@@ -106,10 +106,21 @@ function getInitialSelectedClientId(): number | null {
   return null
 }
 
+// Helper to initialize viewMode from localStorage
+function getInitialViewMode(): 'day' | 'week' {
+  try {
+    const stored = localStorage.getItem('calendar.viewMode')
+    if (stored === 'week' || stored === 'day') return stored
+  } catch {
+    // ignore
+  }
+  return 'day'
+}
+
 export default function CalendarClient() {
   const router = useRouter()
   const [currentDate, setCurrentDate] = useState<Date>(getInitialCurrentDate)
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
+  const [viewMode, setViewMode] = useState<'day' | 'week'>(getInitialViewMode)
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dateRangeError, setDateRangeError] = useState<string | null>(null)
@@ -585,6 +596,15 @@ export default function CalendarClient() {
       // ignore
     }
   }, [dateFrom, dateTo, currentDate])
+
+  useEffect(() => {
+    try {
+      // Save view mode
+      localStorage.setItem('calendar.viewMode', viewMode)
+    } catch {
+      // ignore
+    }
+  }, [viewMode])
 
   useEffect(() => {
     try {
