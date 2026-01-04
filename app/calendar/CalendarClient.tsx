@@ -190,7 +190,7 @@ export default function CalendarClient() {
 
   useEffect(() => {
     fetchData()
-  }, [currentDate, dateFrom, dateTo, selectedClientId])
+  }, [currentDate, dateFrom, dateTo, selectedClientId, viewMode])
 
   // Effect for drag event listeners
   useEffect(() => {
@@ -300,8 +300,16 @@ export default function CalendarClient() {
       console.log('✅ Supabase client created')
       
       const dayYmd = toYmdLocal(currentDate)
-      const rangeFrom = dateFrom || dayYmd
-      const rangeTo = dateTo || dayYmd
+      let rangeFrom = dateFrom || dayYmd
+      let rangeTo = dateTo || dayYmd
+
+      // If in week view, load shifts for the entire week
+      if (viewMode === 'week') {
+        const monday = getMonday(currentDate)
+        const sunday = getSunday(currentDate)
+        rangeFrom = toYmdLocal(monday)
+        rangeTo = toYmdLocal(sunday)
+      }
 
       // For the current day view, also load shifts from the previous day to catch overnight shifts
       const prevDay = new Date(currentDate)
@@ -2179,14 +2187,16 @@ export default function CalendarClient() {
     const d = new Date(date);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
+    const monday = new Date(d.getFullYear(), d.getMonth(), diff);
+    return monday;
   }
 
   const getSunday = (date: Date): Date => {
     const d = new Date(date);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? 0 : 7);
-    return new Date(d.setDate(diff));
+    const sunday = new Date(d.getFullYear(), d.getMonth(), diff);
+    return sunday;
   }
 
   const renderErrorMessage = (errorText: string) => {
