@@ -205,6 +205,24 @@ img, svg {
   border-color: var(--accent);
 }
 
+.nav-link.nav-sub {
+  font-size: 16px;
+  font-weight: 400;
+  padding: 12px 20px 12px 40px;
+  margin-left: 0;
+  border-radius: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.nav-link.nav-sub:hover {
+  background-color: var(--surface-hover);
+  border-color: transparent;
+  color: var(--text);
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding-top: 12px;

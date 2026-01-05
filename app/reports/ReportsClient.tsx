@@ -11,6 +11,7 @@ interface CarerReport {
 }
 
 interface LineItemReport {
+  category: string
   code: string
   description: string
   hours: number
@@ -20,8 +21,14 @@ interface LineItemReport {
 interface LineItemCode {
   id: string
   code: string
-  description: string | null
   category: string | null
+  description: string | null
+}
+
+interface CategoryReport {
+  category: string
+  hours: number
+  cost: number
 }
 
 interface Shift {
@@ -32,6 +39,7 @@ interface Shift {
   cost: number
   shift_date: string
   category?: string | null
+  line_item_code_id?: string | number | null
   carers?: { id: number; first_name: string; last_name: string }
   line_items?: { code: string; description: string | null; category: string | null }
 }
@@ -46,6 +54,7 @@ export default function ReportsClient() {
   const [selectedLineItemCode, setSelectedLineItemCode] = useState('')
   const [hireupMapping, setHireupMapping] = useState('')
   const [shifts, setShifts] = useState<Shift[]>([])
+  const [categoryReports, setCategoryReports] = useState<CategoryReport[]>([])
   const [loading, setLoading] = useState(true)
 
   // Load dates from localStorage on mount
@@ -59,23 +68,7 @@ export default function ReportsClient() {
     if (savedHireupMapping) setHireupMapping(savedHireupMapping)
   }, [])
 
-  // Save dates to localStorage
-  useEffect(() => {
-    if (dateFrom) localStorage.setItem('reports.dateFrom', dateFrom)
-    else localStorage.removeItem('reports.dateFrom')
-  }, [dateFrom])
-
-  useEffect(() => {
-    if (dateTo) localStorage.setItem('reports.dateTo', dateTo)
-    else localStorage.removeItem('reports.dateTo')
-  }, [dateTo])
-
-  useEffect(() => {
-    if (hireupMapping) localStorage.setItem('reports.hireupMapping', hireupMapping)
-    else localStorage.removeItem('reports.hireupMapping')
-  }, [hireupMapping])
-
-  // Fetch data
+  // Fetch line item codes and shifts data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
@@ -84,7 +77,7 @@ export default function ReportsClient() {
 
         // Fetch line item codes
         const { data: codes } = await supabase
-          .from('line_item_codes')
+          .from('line_items')
           .select('*')
           .order('code')
         
@@ -105,7 +98,7 @@ export default function ReportsClient() {
         if (shiftsData) {
           // Fetch carers for enrichment
           const { data: carersData } = await supabase.from('carers').select('*')
-          const { data: lineItemsData } = await supabase.from('line_item_codes').select('*')
+          const { data: lineItemsData } = await supabase.from('line_items').select('*')
 
           const enrichedShifts = shiftsData.map(shift => ({
             ...shift,
@@ -114,7 +107,6 @@ export default function ReportsClient() {
           }))
 
           setShifts(enrichedShifts)
-          calculateReports(enrichedShifts, hireupMapping)
         }
       } catch (error) {
         console.error('Error fetching reports data:', error)
@@ -124,11 +116,35 @@ export default function ReportsClient() {
     }
 
     fetchData()
-  }, [dateFrom, dateTo, hireupMapping])
+  }, [dateFrom, dateTo])
+
+  // Save dates to localStorage
+  useEffect(() => {
+    if (dateFrom) localStorage.setItem('reports.dateFrom', dateFrom)
+    else localStorage.removeItem('reports.dateFrom')
+  }, [dateFrom])
+
+  useEffect(() => {
+    if (dateTo) localStorage.setItem('reports.dateTo', dateTo)
+    else localStorage.removeItem('reports.dateTo')
+  }, [dateTo])
+
+  useEffect(() => {
+    if (hireupMapping) localStorage.setItem('reports.hireupMapping', hireupMapping)
+    else localStorage.removeItem('reports.hireupMapping')
+  }, [hireupMapping])
+
+  // Separate effect to recalculate reports when shifts or hireupMapping changes
+  useEffect(() => {
+    if (shifts.length > 0) {
+      calculateReports(shifts, hireupMapping)
+    }
+  }, [shifts, hireupMapping, lineItemCodes])
 
   const calculateReports = (shiftsData: Shift[], hireupCode: string) => {
     // Calculate carer reports
     const carerMap = new Map<number, { hours: number; cost: number; name: string }>()
+    const categoryMap = new Map<string, { hours: number; cost: number }>()
 
     shiftsData.forEach(shift => {
       if (!shift.carers) return
@@ -159,10 +175,13 @@ export default function ReportsClient() {
     setCarerReports(carerReportArray)
 
     // Calculate line item code reports
-    const lineItemMap = new Map<string, { hours: number; cost: number; code: string; description: string }>()
+    const lineItemMap = new Map<string, { hours: number; cost: number; code: string; category: string; description: string }>()
 
     shiftsData.forEach(shift => {
-      let codeId = shift.line_item_code_id
+      let codeId: string | null = null
+      if (shift.line_item_code_id !== null && shift.line_item_code_id !== undefined) {
+        codeId = String(shift.line_item_code_id)
+      }
       
       // Map HIREUP to selected code
       if (shift.category === 'HIREUP' && hireupCode) {
@@ -172,13 +191,15 @@ export default function ReportsClient() {
       if (!codeId) return
 
       const duration = calculateDuration(shift.time_from, shift.time_to)
-      const lineItem = lineItemCodes.find(l => l.id === codeId)
+      const lineItem = lineItemCodes.find(l => String(l.id) === codeId)
+      const categoryName = lineItem?.category || shift.category || 'Uncategorized'
       
       if (!lineItemMap.has(codeId)) {
         lineItemMap.set(codeId, {
           hours: 0,
           cost: 0,
           code: lineItem?.code || codeId,
+          category: categoryName,
           description: lineItem?.description || ''
         })
       }
@@ -186,16 +207,39 @@ export default function ReportsClient() {
       const current = lineItemMap.get(codeId)!
       current.hours += duration
       current.cost += shift.cost || 0
+
+      if (!categoryMap.has(categoryName)) {
+        categoryMap.set(categoryName, { hours: 0, cost: 0 })
+      }
+      const categoryBucket = categoryMap.get(categoryName)!
+      categoryBucket.hours += duration
+      categoryBucket.cost += shift.cost || 0
     })
 
-    const lineItemReportArray = Array.from(lineItemMap.entries()).map(([code, data]) => ({
-      code: data.code,
-      description: data.description,
-      hours: Math.round(data.hours * 100) / 100,
-      cost: Math.round(data.cost * 100) / 100
-    }))
+    const lineItemReportArray = Array.from(lineItemMap.entries())
+      .map(([codeId, data]) => ({
+        category: data.category,
+        code: data.code,
+        description: data.description,
+        hours: Math.round(data.hours * 100) / 100,
+        cost: Math.round(data.cost * 100) / 100
+      }))
+      .sort((a, b) => {
+        const categoryCompare = a.category.localeCompare(b.category)
+        if (categoryCompare !== 0) return categoryCompare
+        return b.hours - a.hours
+      })
+
+    const categoryReportArray = Array.from(categoryMap.entries())
+      .map(([category, data]) => ({
+        category,
+        hours: Math.round(data.hours * 100) / 100,
+        cost: Math.round(data.cost * 100) / 100
+      }))
+      .sort((a, b) => b.cost - a.cost)
 
     setLineItemReports(lineItemReportArray)
+    setCategoryReports(categoryReportArray)
   }
 
   const calculateDuration = (timeFrom: string, timeTo: string): number => {
@@ -204,7 +248,7 @@ export default function ReportsClient() {
     return (to.getTime() - from.getTime()) / (1000 * 60 * 60)
   }
 
-  const categories = Array.from(new Set(lineItemCodes.map(l => l.category).filter(Boolean)))
+  const categories = Array.from(new Set(lineItemCodes.map(l => l.category).filter(Boolean))) as string[]
   const filteredCodes = selectedCategory
     ? lineItemCodes.filter(l => l.category === selectedCategory)
     : []
@@ -214,6 +258,8 @@ export default function ReportsClient() {
 
   const lineItemTotalHours = lineItemReports.reduce((sum, l) => sum + l.hours, 0)
   const lineItemTotalCost = lineItemReports.reduce((sum, l) => sum + l.cost, 0)
+  const categoryTotalHours = categoryReports.reduce((sum, c) => sum + c.hours, 0)
+  const categoryTotalCost = categoryReports.reduce((sum, c) => sum + c.cost, 0)
 
   const normalizeDateInput = (value: string): string => {
     if (!value) return ''
@@ -312,57 +358,139 @@ export default function ReportsClient() {
               <div className="reports-chart-placeholder">
                 <h3>Carers Time Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <div className="reports-chart-legend">
-                    {carerReports.map((carer, idx) => {
-                      const percentage = (carer.shiftHours / carerTotalHours) * 100
+                  <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                    {(() => {
+                      let currentAngle = -90
                       const colors = [
                         '#3b82f6', '#ef4444', '#22c55e', '#f97316',
                         '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
                       ]
-                      return (
-                        <div key={idx} className="reports-legend-item">
-                          <span 
-                            className="reports-legend-color" 
-                            style={{ backgroundColor: colors[idx % colors.length] }}
-                          />
-                          <span className="reports-legend-text">
-                            {carer.carerName}: {percentage.toFixed(1)}%
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                      
+                      return carerReports.map((carer, idx) => {
+                        const sliceAngle = (carer.shiftHours / carerTotalHours) * 360
+                        const startAngle = currentAngle
+                        const endAngle = currentAngle + sliceAngle
+                        
+                        const startRad = (startAngle * Math.PI) / 180
+                        const endRad = (endAngle * Math.PI) / 180
+                        
+                        const x1 = 100 + 80 * Math.cos(startRad)
+                        const y1 = 100 + 80 * Math.sin(startRad)
+                        const x2 = 100 + 80 * Math.cos(endRad)
+                        const y2 = 100 + 80 * Math.sin(endRad)
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0
+                        
+                        const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        
+                        currentAngle = endAngle
+                        
+                        return (
+                          <g key={idx}>
+                            <path
+                              d={path}
+                              fill={colors[idx % colors.length]}
+                              stroke="var(--card)"
+                              strokeWidth="1"
+                            />
+                          </g>
+                        )
+                      })
+                    })()}
+                  </svg>
                 ) : (
                   <p style={{ color: '#999' }}>No data</p>
                 )}
+                <div className="reports-chart-legend">
+                  {carerReports.map((carer, idx) => {
+                    const percentage = (carer.shiftHours / carerTotalHours) * 100
+                    const colors = [
+                      '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                      '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                    ]
+                    return (
+                      <div key={idx} className="reports-legend-item">
+                        <span 
+                          className="reports-legend-color" 
+                          style={{ backgroundColor: colors[idx % colors.length] }}
+                        />
+                        <span className="reports-legend-text">
+                          {carer.carerName}: {percentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="reports-chart-placeholder">
-                <h3>Carers Hours Distribution</h3>
+                <h3>Carers Total Cost Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <div className="reports-chart-legend">
-                    {carerReports.map((carer, idx) => {
+                  <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                    {(() => {
+                      let currentAngle = -90
                       const colors = [
                         '#3b82f6', '#ef4444', '#22c55e', '#f97316',
                         '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
                       ]
-                      return (
-                        <div key={idx} className="reports-legend-item">
-                          <span 
-                            className="reports-legend-color" 
-                            style={{ backgroundColor: colors[idx % colors.length] }}
-                          />
-                          <span className="reports-legend-text">
-                            {carer.carerName}: {carer.shiftHours.toFixed(2)}h
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                      
+                      return carerReports.map((carer, idx) => {
+                        const sliceAngle = (carer.totalCost / carerTotalCost) * 360
+                        const startAngle = currentAngle
+                        const endAngle = currentAngle + sliceAngle
+                        
+                        const startRad = (startAngle * Math.PI) / 180
+                        const endRad = (endAngle * Math.PI) / 180
+                        
+                        const x1 = 100 + 80 * Math.cos(startRad)
+                        const y1 = 100 + 80 * Math.sin(startRad)
+                        const x2 = 100 + 80 * Math.cos(endRad)
+                        const y2 = 100 + 80 * Math.sin(endRad)
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0
+                        
+                        const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        
+                        currentAngle = endAngle
+                        
+                        return (
+                          <g key={idx}>
+                            <path
+                              d={path}
+                              fill={colors[idx % colors.length]}
+                              stroke="var(--card)"
+                              strokeWidth="1"
+                            />
+                          </g>
+                        )
+                      })
+                    })()}
+                  </svg>
                 ) : (
                   <p style={{ color: '#999' }}>No data</p>
                 )}
+                <div className="reports-chart-legend">
+                  {carerReports.map((carer, idx) => {
+                    const percentage = (carer.totalCost / carerTotalCost) * 100
+                    const colors = [
+                      '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                      '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                    ]
+                    return (
+                      <div key={idx} className="reports-legend-item">
+                        <span 
+                          className="reports-legend-color" 
+                          style={{ backgroundColor: colors[idx % colors.length] }}
+                        />
+                        <span className="reports-legend-text">
+                          {carer.carerName}: {percentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
+
             </div>
           </section>
 
@@ -448,7 +576,7 @@ export default function ReportsClient() {
                   ) : (
                     <>
                       {lineItemReports.map((item, idx) => (
-                        <tr key={item.code}>
+                        <tr key={`${item.category}-${item.code}-${idx}`}>
                           <td>{idx + 1}</td>
                           <td>{item.code}</td>
                           <td>{item.description}</td>
@@ -472,6 +600,122 @@ export default function ReportsClient() {
                 </tbody>
               </table>
             </div>
+
+            <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Line Item Categories</h3>
+            <div className="reports-table-wrapper">
+              <table className="reports-table">
+                <thead>
+                  <tr>
+                    <th>Seq</th>
+                    <th>Category</th>
+                    <th>Hours</th>
+                    <th>Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryReports.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center' }}>
+                        No data for selected period
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {categoryReports.map((item, idx) => (
+                        <tr key={`${item.category}-${idx}`}>
+                          <td>{idx + 1}</td>
+                          <td>{item.category}</td>
+                          <td>{item.hours.toFixed(2)}</td>
+                          <td>${item.cost.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr className="reports-total-row">
+                        <td colSpan={2} style={{ fontWeight: 'bold' }}>
+                          TOTAL
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          {categoryTotalHours.toFixed(2)}
+                        </td>
+                        <td style={{ fontWeight: 'bold' }}>
+                          ${categoryTotalCost.toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Category Budget Distribution Chart */}
+            <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Category Budget Distribution</h3>
+            <div className="reports-table-wrapper" style={{ maxWidth: '500px' }}>
+              {categoryReports.length > 0 ? (
+                <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                  {(() => {
+                    let currentAngle = -90
+                    const totalCost = categoryTotalCost || 1
+                    const colors = [
+                      '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                      '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                    ]
+
+                    return categoryReports.map((cat, idx) => {
+                      const sliceAngle = (cat.cost / totalCost) * 360
+                      const startAngle = currentAngle
+                      const endAngle = currentAngle + sliceAngle
+
+                      const startRad = (startAngle * Math.PI) / 180
+                      const endRad = (endAngle * Math.PI) / 180
+
+                      const x1 = 100 + 80 * Math.cos(startRad)
+                      const y1 = 100 + 80 * Math.sin(startRad)
+                      const x2 = 100 + 80 * Math.cos(endRad)
+                      const y2 = 100 + 80 * Math.sin(endRad)
+
+                      const largeArc = sliceAngle > 180 ? 1 : 0
+
+                      const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+
+                      currentAngle = endAngle
+
+                      return (
+                        <g key={idx}>
+                          <path
+                            d={path}
+                            fill={colors[idx % colors.length]}
+                            stroke="var(--card)"
+                            strokeWidth="1"
+                          />
+                        </g>
+                      )
+                    })
+                  })()}
+                </svg>
+              ) : (
+                <p style={{ color: '#999' }}>No data</p>
+              )}
+              <div className="reports-chart-legend">
+                {categoryReports.map((cat, idx) => {
+                  const totalCost = categoryTotalCost || 1
+                  const percentage = (cat.cost / totalCost) * 100
+                  const colors = [
+                    '#3b82f6', '#ef4444', '#22c55e', '#f97316',
+                    '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
+                  ]
+                  return (
+                    <div key={idx} className="reports-legend-item">
+                      <span
+                        className="reports-legend-color"
+                        style={{ backgroundColor: colors[idx % colors.length] }}
+                      />
+                      <span className="reports-legend-text">
+                        {cat.category}: {percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </section>
         </>
       )}
@@ -482,6 +726,8 @@ export default function ReportsClient() {
           background: var(--bg);
           color: var(--text);
           min-height: 100vh;
+          max-height: 100vh;
+          overflow-y: auto;
         }
 
         h1 {
@@ -601,7 +847,7 @@ export default function ReportsClient() {
 
         .reports-charts {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
           gap: 24px;
           margin-top: 24px;
         }
@@ -646,6 +892,12 @@ export default function ReportsClient() {
           color: var(--text);
           font-size: 0.95rem;
           word-break: break-word;
+        }
+
+        .reports-pie-svg {
+          width: 200px;
+          height: 200px;
+          margin: 0 auto 20px;
         }
 
         .pie-chart {
