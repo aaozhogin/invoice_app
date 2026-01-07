@@ -3195,10 +3195,6 @@ export default function CalendarClient() {
 
   const handleDeleteAllShiftsForWeek = async () => {
     try {
-      if (!selectedClientId) {
-        alert('No client selected for bulk delete.')
-        return
-      }
       const srcMonday = getMonday(currentDate)
       const srcWeekStart = toYmdLocal(srcMonday)
       const srcSunday = new Date(srcMonday)
@@ -3210,7 +3206,6 @@ export default function CalendarClient() {
       const { error, data } = await supabase.from('shifts').delete()
         .gte('shift_date', srcWeekStart)
         .lte('shift_date', srcWeekEnd)
-        .eq('client_id', selectedClientId)
 
       console.log('🗑️ Delete response:', { error, data })
       if (error) throw error
