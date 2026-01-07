@@ -34,7 +34,6 @@ export default function HomePage() {
     </div>
   )
 }
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#7dd3fc' }}>Key Features</h2>
         
         <div style={{ marginBottom: '1.5rem' }}>
           <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: '#e2e8f0' }}>📅 Smart Calendar Management</h3>
