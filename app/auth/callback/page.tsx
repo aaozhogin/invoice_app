@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import getSupabaseClient from '@/app/lib/supabaseClient'
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [message, setMessage] = useState<string>('Finalizing sign-in…')
@@ -58,5 +58,22 @@ export default function AuthCallbackPage() {
     }}>
       <div style={{ fontSize: '18px', color: '#94a3b8' }}>{message}</div>
     </div>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh'
+      }}>
+        <div style={{ fontSize: '18px', color: '#94a3b8' }}>Loading…</div>
+      </div>
+    }>
+      <AuthCallbackContent />
+    </Suspense>
   )
 }
