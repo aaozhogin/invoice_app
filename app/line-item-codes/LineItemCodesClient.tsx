@@ -225,9 +225,10 @@ export default function LineItemCodesClient() {
 
   // Fetch categories
   useEffect(() => {
+    if (!user) return;
     let mounted = true;
     (async () => {
-      const res = (await supabase.from('line_item_categories').select('*').order('name', { ascending: true })) as {
+      const res = (await supabase.from('line_item_categories').select('*').eq('user_id', user.id).order('name', { ascending: true })) as {
         data: LineItemCategory[] | null;
         error: any;
       };
