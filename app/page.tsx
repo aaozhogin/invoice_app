@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './lib/AuthContext'
 
+// Home page - redirects based on auth status
 export default function HomePage() {
   const router = useRouter()
   const { user, loading } = useAuth()
