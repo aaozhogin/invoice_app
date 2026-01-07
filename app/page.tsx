@@ -34,8 +34,6 @@ export default function HomePage() {
     </div>
   )
 }
-
-      <section style={{ marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#7dd3fc' }}>Key Features</h2>
         
         <div style={{ marginBottom: '1.5rem' }}>
