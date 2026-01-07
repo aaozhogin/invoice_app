@@ -4,6 +4,9 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import getSupabaseClient from '@/app/lib/supabaseClient'
 
+// Force dynamic rendering - this page handles auth callbacks with search params
+export const dynamic = 'force-dynamic'
+
 function AuthCallbackContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
