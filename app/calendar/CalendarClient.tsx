@@ -2454,9 +2454,10 @@ export default function CalendarClient() {
         return
       }
 
-      // Validate that client is selected
-      if (!selectedClientId) {
-        setError('Please select a client from the top menu')
+      // Validate that client is selected (from form or top menu)
+      const clientForShift = newShift.client_id ?? selectedClientId
+      if (!clientForShift) {
+        setError('Please select a client')
         return
       }
       
