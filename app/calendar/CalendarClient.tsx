@@ -3172,14 +3172,17 @@ export default function CalendarClient() {
   const handleDeleteAllShiftsForDay = async (dayYmd: string) => {
     try {
       const supabase = getSupabaseClient()
-      const { error } = await supabase.from('shifts').delete().eq('shift_date', dayYmd)
+      console.log('🗑️ Deleting shifts for day:', dayYmd)
+      const { error, data } = await supabase.from('shifts').delete().eq('shift_date', dayYmd)
       
+      console.log('🗑️ Delete response:', { error, data })
       if (error) throw error
       
       setDeleteAllShiftsDateConfirm(null)
       await fetchData()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to delete shifts'
+      console.error('❌ Delete error:', err)
       setError(msg)
     }
   }
@@ -3193,16 +3196,19 @@ export default function CalendarClient() {
       const srcWeekEnd = toYmdLocal(srcSunday)
       
       const supabase = getSupabaseClient()
-      const { error } = await supabase.from('shifts').delete()
+      console.log('🗑️ Deleting shifts for week:', { srcWeekStart, srcWeekEnd })
+      const { error, data } = await supabase.from('shifts').delete()
         .gte('shift_date', srcWeekStart)
         .lte('shift_date', srcWeekEnd)
       
+      console.log('🗑️ Delete response:', { error, data })
       if (error) throw error
       
       setDeleteAllShiftsWeekConfirm(false)
       await fetchData()
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to delete shifts'
+      console.error('❌ Delete error:', err)
       setError(msg)
     }
   }
