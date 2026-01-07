@@ -2447,7 +2447,13 @@ export default function CalendarClient() {
     
     try {
       console.log('Starting handleSaveShift - callId:', callId)
-      
+      console.log('🔍 handleSaveShift debug:', {
+        newShiftClientId: newShift.client_id,
+        selectedClientId,
+        editingShift,
+        newShift
+      })
+
       // Validate that carer is selected
       if (!newShift.carer_id) {
         setError('Please select a carer')
@@ -3189,21 +3195,26 @@ export default function CalendarClient() {
 
   const handleDeleteAllShiftsForWeek = async () => {
     try {
+      if (!selectedClientId) {
+        alert('No client selected for bulk delete.')
+        return
+      }
       const srcMonday = getMonday(currentDate)
       const srcWeekStart = toYmdLocal(srcMonday)
       const srcSunday = new Date(srcMonday)
       srcSunday.setDate(srcSunday.getDate() + 6)
       const srcWeekEnd = toYmdLocal(srcSunday)
-      
+
       const supabase = getSupabaseClient()
-      console.log('🗑️ Deleting shifts for week:', { srcWeekStart, srcWeekEnd })
+      console.log('🗑️ Deleting shifts for week:', { srcWeekStart, srcWeekEnd, selectedClientId })
       const { error, data } = await supabase.from('shifts').delete()
         .gte('shift_date', srcWeekStart)
         .lte('shift_date', srcWeekEnd)
-      
+        .eq('client_id', selectedClientId)
+
       console.log('🗑️ Delete response:', { error, data })
       if (error) throw error
-      
+
       setDeleteAllShiftsWeekConfirm(false)
       await fetchData()
     } catch (err) {
