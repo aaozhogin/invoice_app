@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/app/lib/types/supabase'
+import getSupabaseClient from '@/app/lib/supabaseClient'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
@@ -11,6 +12,14 @@ export async function GET(req: Request) {
   }
 
   try {
+    // Get the authenticated user's session to filter by user_id
+    const supabaseAuth = getSupabaseClient()
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser()
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
     const { data, error } = await supabase
@@ -20,6 +29,7 @@ export async function GET(req: Request) {
         carers:carer_id(id, first_name, last_name),
         clients:client_id(id, first_name, last_name)
       `)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -32,6 +42,7 @@ export async function GET(req: Request) {
       const { data: shifts, error: shiftsError } = await supabase
         .from('shifts')
         .select('cost')
+        .eq('user_id', user.id)
         .eq('carer_id', invoice.carer_id)
         .eq('client_id', invoice.client_id)
         .gte('shift_date', invoice.date_from)

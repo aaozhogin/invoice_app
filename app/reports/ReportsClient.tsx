@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getSupabaseClient } from '@/app/lib/supabaseClient'
+import { useAuth } from '@/app/lib/AuthContext'
 
 interface CarerReport {
   carerId: number
@@ -45,6 +46,7 @@ interface Shift {
 }
 
 export default function ReportsClient() {
+  const { user, loading: authLoading } = useAuth();
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [carerReports, setCarerReports] = useState<CarerReport[]>([])
@@ -70,6 +72,7 @@ export default function ReportsClient() {
 
   // Fetch line item codes and shifts data
   useEffect(() => {
+    if (!user) return;
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -79,12 +82,13 @@ export default function ReportsClient() {
         const { data: codes } = await supabase
           .from('line_items')
           .select('*')
+          .eq('user_id', user.id)
           .order('code')
         
         if (codes) setLineItemCodes(codes)
 
         // Fetch shifts
-        let query = supabase.from('shifts').select('*')
+        let query = supabase.from('shifts').select('*').eq('user_id', user.id)
         
         if (dateFrom) {
           query = query.gte('shift_date', dateFrom)
@@ -97,8 +101,8 @@ export default function ReportsClient() {
 
         if (shiftsData) {
           // Fetch carers for enrichment
-          const { data: carersData } = await supabase.from('carers').select('*')
-          const { data: lineItemsData } = await supabase.from('line_items').select('*')
+          const { data: carersData } = await supabase.from('carers').select('*').eq('user_id', user.id)
+          const { data: lineItemsData } = await supabase.from('line_items').select('*').eq('user_id', user.id)
 
           const enrichedShifts = shiftsData.map(shift => ({
             ...shift,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/AuthContext';
 
 // Client type definition
 interface Client {
@@ -23,6 +24,7 @@ interface ClientForm {
 
 export default function ClientsClient() {
   const supabase = getSupabaseClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [clients, setClients] = useState<Client[]>([]);
   const [formVisible, setFormVisible] = useState(false);
@@ -80,10 +82,12 @@ export default function ClientsClient() {
   }, []);
 
   const loadClients = async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
         .from('clients')
         .select('*')
+        .eq('user_id', user.id)
         .order('id');
 
       if (error) {

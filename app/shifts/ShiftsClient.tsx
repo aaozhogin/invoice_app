@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { getSupabaseClient } from '../lib/supabaseClient';
+import { useAuth } from '../lib/AuthContext';
 
 interface Shift {
   id: number
@@ -80,6 +81,7 @@ const formatDurationHours = (shift: Shift) => {
 
 export default function ShiftsClient() {
   const supabase = getSupabaseClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [carers, setCarers] = useState<Carer[]>([]);
@@ -118,6 +120,7 @@ export default function ShiftsClient() {
   }, []);
 
   const loadShifts = async () => {
+    if (!user) return;
     try {
       const { data, error } = await supabase
         .from('shifts')
@@ -126,6 +129,7 @@ export default function ShiftsClient() {
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
         `)
+        .eq('user_id', user.id)
         .order('time_from', { ascending: false });
 
       if (error) {
@@ -134,7 +138,7 @@ export default function ShiftsClient() {
       }
 
       // Manually join clients data with shifts since client_id column might be missing
-      const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*');
+      const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*').eq('user_id', user.id);
       
       if (!clientsError && clientsData) {
         const clientsMap = new Map(clientsData.map(client => [client.id, client]));
@@ -152,8 +156,9 @@ export default function ShiftsClient() {
   };
 
   const loadCarers = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase.from('carers').select('*').order('first_name');
+      const { data, error } = await supabase.from('carers').select('*').eq('user_id', user.id).order('first_name');
       if (error) {
         console.error('Error loading carers:', error);
         return;
@@ -165,8 +170,9 @@ export default function ShiftsClient() {
   };
 
   const loadClients = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase.from('clients').select('*').order('first_name');
+      const { data, error } = await supabase.from('clients').select('*').eq('user_id', user.id).order('first_name');
       if (error) {
         console.error('Error loading clients:', error);
         return;
@@ -178,8 +184,9 @@ export default function ShiftsClient() {
   };
 
   const loadLineItemCodes = async () => {
+    if (!user) return;
     try {
-      const { data, error } = await supabase.from('line_items').select('*');
+      const { data, error } = await supabase.from('line_items').select('*').eq('user_id', user.id);
       if (error) {
         console.error('Error loading line item codes:', error);
         return;

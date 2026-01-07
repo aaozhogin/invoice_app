@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
+import { useAuth } from '../lib/AuthContext';
 import { Database } from '../lib/types/supabase';
 
 type LineItem = Database['public']['Tables']['line_items']['Row'];
@@ -168,6 +169,7 @@ function TimePicker({
 
 export default function LineItemCodesClient() {
   const supabase = getSupabaseClient();
+  const { user, loading: authLoading } = useAuth();
 
   const [items, setItems] = useState<LineItem[]>([]);
   const [categories, setCategories] = useState<LineItemCategory[]>([]);
@@ -201,9 +203,10 @@ export default function LineItemCodesClient() {
 
   // Fetch line items
   useEffect(() => {
+    if (!user) return;
     let mounted = true;
     (async () => {
-      const res = (await supabase.from('line_items').select('*')) as {
+      const res = (await supabase.from('line_items').select('*').eq('user_id', user.id)) as {
         data: LineItem[] | null;
         error: any;
       };

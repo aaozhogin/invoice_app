@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import getSupabaseClient from '../lib/supabaseClient';
+import { useAuth } from '../lib/AuthContext';
 import { Database } from '../lib/types/supabase';
 
 type Carer = Database['public']['Tables']['carers']['Row'] & {
@@ -33,6 +34,7 @@ const CARER_COLORS = [
 ];
 
 export default function CarersClient() {
+  const { user, loading: authLoading } = useAuth();
   const [carers, setCarers] = useState<Carer[]>([]);
   const [formVisible, setFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -65,9 +67,10 @@ export default function CarersClient() {
 
   // Fetch carers on component mount
   useEffect(() => {
+    if (!user) return;
     let mounted = true;
     (async () => {
-      const res = await supabase.from('carers').select('*').order('last_name', { ascending: true });
+      const res = await supabase.from('carers').select('*').eq('user_id', user.id).order('last_name', { ascending: true });
       const { data, error } = res;
       if (error) {
         console.error('Fetch error:', error);
