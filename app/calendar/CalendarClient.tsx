@@ -4727,11 +4727,11 @@ export default function CalendarClient() {
         .calendar-container {
           padding: 12px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          height: 100%;
+          height: 100vh;
           display: flex;
           flex-direction: column;
           gap: 8px;
-          overflow: hidden;
+          overflow: auto;
           box-sizing: border-box;
         }
 
@@ -4823,8 +4823,8 @@ export default function CalendarClient() {
           border-radius: 8px;
           background: var(--card);
           flex: 1;
-          min-height: 0;
-          overflow: hidden;
+          min-height: 600px;
+          overflow: auto;
           overflow-x: hidden;
         }
 
