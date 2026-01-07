@@ -18,13 +18,12 @@ We need to execute 3 SQL migration scripts in Supabase in this order:
 
 ## Step 1: Get the UUID of aaozhogin@gmail.com
 
-1. Go to your [Supabase Dashboard](https://supabase.com)
-2. Select your project
-3. Go to **Authentication → Users** (left sidebar)
-4. Find the user **aaozhogin@gmail.com**
-5. Click on the user row to open details
-6. **Copy the UUID** (it looks like: `550e8400-e29b-41d4-a716-446655440000`)
-7. **Save this UUID** - you'll need it in Step 4
+**✅ ALREADY DONE - Your UUID is:**
+```
+593c00f8-87f1-4123-aab8-d70fdfa80099
+```
+
+This UUID has been automatically added to the migration scripts below.
 
 ---
 
@@ -55,27 +54,22 @@ We need to execute 3 SQL migration scripts in Supabase in this order:
 
 ---
 
-## Step 4: Execute migrate_existing_data.sql (with UUID substitution)
+## Step 4: Execute migrate_existing_data.sql
 
-This is critical - you must replace the placeholder with the real UUID:
+✅ **UUID is already substituted in the migration file!**
 
-1. Open `/migrations/migrate_existing_data.sql`
-2. **Find and replace ALL instances of:**
-   - Search: `'USER_ID_HERE'`
-   - Replace with: `'PASTE_YOUR_UUID_HERE'` (include the single quotes)
-   - Example: `'550e8400-e29b-41d4-a716-446655440000'`
-
-3. In Supabase SQL Editor, click **+ New Query**
-4. Copy the entire modified SQL file
-5. Paste into the SQL editor
-6. Click **Run**
-7. You should see messages like:
+1. In Supabase SQL Editor, click **+ New Query**
+2. Copy the entire contents of `/migrations/migrate_existing_data.sql`
+   - The UUID `593c00f8-87f1-4123-aab8-d70fdfa80099` is already in place
+3. Paste into the SQL editor
+4. Click **Run**
+5. You should see messages like:
    ```
    UPDATE 50  (meaning 50 shifts were updated)
    UPDATE 10  (meaning 10 carers were updated)
    etc.
    ```
-8. ✅ Confirm all executed successfully
+6. ✅ Confirm all executed successfully
 
 ---
 
