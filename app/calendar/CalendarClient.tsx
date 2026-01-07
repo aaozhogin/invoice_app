@@ -3172,7 +3172,7 @@ export default function CalendarClient() {
   const handleDeleteAllShiftsForDay = async (dayYmd: string) => {
     try {
       const supabase = getSupabaseClient()
-      const { error } = await supabase.from('shifts').delete().eq('shift_date', dayYmd).eq('client_id', selectedClientId)
+      const { error } = await supabase.from('shifts').delete().eq('shift_date', dayYmd)
       
       if (error) throw error
       
@@ -3196,7 +3196,6 @@ export default function CalendarClient() {
       const { error } = await supabase.from('shifts').delete()
         .gte('shift_date', srcWeekStart)
         .lte('shift_date', srcWeekEnd)
-        .eq('client_id', selectedClientId)
       
       if (error) throw error
       
@@ -3216,7 +3215,7 @@ export default function CalendarClient() {
     const srcWeekEnd = toYmdLocal(srcSunday)
     
     return rangeShifts.filter(
-      s => s.shift_date >= srcWeekStart && s.shift_date <= srcWeekEnd && s.client_id === selectedClientId
+      s => s.shift_date >= srcWeekStart && s.shift_date <= srcWeekEnd
     ).length
   }
 
@@ -3226,7 +3225,6 @@ export default function CalendarClient() {
       const supabase = getSupabaseClient()
       const { error } = await supabase.from('shifts').delete()
         .eq('shift_date', dayYmd)
-        .eq('client_id', selectedClientId)
       
       if (error) throw error
       
@@ -3241,7 +3239,7 @@ export default function CalendarClient() {
   const getDayShiftCount = () => {
     const dayYmd = toYmdLocal(currentDate)
     return rangeShifts.filter(
-      s => s.shift_date === dayYmd && s.client_id === selectedClientId
+      s => s.shift_date === dayYmd
     ).length
   }
 
