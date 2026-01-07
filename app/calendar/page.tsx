@@ -1,5 +1,10 @@
 import CalendarClient from './CalendarClient';
+import ProtectedRoute from '../lib/ProtectedRoute';
 
 export default function CalendarPage() {
-  return <CalendarClient />;
+  return (
+    <ProtectedRoute>
+      <CalendarClient />
+    </ProtectedRoute>
+  );
 }

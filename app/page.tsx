@@ -1,10 +1,39 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from './lib/AuthContext'
+
 export default function HomePage() {
+  const router = useRouter()
+  const { user, loading } = useAuth()
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        router.push('/calendar')
+      } else {
+        router.push('/login')
+      }
+    }
+  }, [user, loading, router])
+
   return (
-    <div style={{ padding: '2rem', maxWidth: '900px' }}>
-      <h1>Welcome to Invoice App</h1>
-      <p style={{ fontSize: '1.1rem', marginBottom: '2rem', color: '#94a3b8' }}>
-        A comprehensive care shift management and invoicing system designed for streamlined operations and accurate billing.
-      </p>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '100vh'
+    }}>
+      <div style={{
+        fontSize: '18px',
+        color: '#94a3b8'
+      }}>
+        Loading...
+      </div>
+    </div>
+  )
+}
 
       <section style={{ marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#7dd3fc' }}>Key Features</h2>

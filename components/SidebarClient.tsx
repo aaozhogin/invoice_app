@@ -2,16 +2,24 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useAuth } from '@/app/lib/AuthContext'
+import { usePathname } from 'next/navigation'
 
 export default function SidebarClient() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const { user, signOut } = useAuth()
+  const pathname = usePathname()
+
+  // Hide sidebar on auth pages
+  const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password'
+  
+  if (isAuthPage || !user) {
+    return null
+  }
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">Invoice App</div>
-      <Link href="/" className="nav-link" style={{textAlign: 'left'}}>
-        Home
-      </Link>
       <Link href="/calendar" className="nav-link" style={{textAlign: 'left'}}>
         Calendar
       </Link>
@@ -146,6 +154,42 @@ export default function SidebarClient() {
           }
         }
       `}</style>
+      
+      <div style={{
+        marginTop: 'auto',
+        padding: '16px',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px'
+      }}>
+        {user && (
+          <>
+            <div style={{
+              fontSize: '14px',
+              color: 'var(--muted)',
+              wordBreak: 'break-all'
+            }}>
+              {user.email}
+            </div>
+            <button
+              onClick={() => signOut()}
+              className="nav-link"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                padding: '10px 16px',
+                borderRadius: '6px',
+                textAlign: 'center'
+              }}
+            >
+              Sign Out
+            </button>
+          </>
+        )}
+      </div>
     </aside>
   );
 }
