@@ -19,7 +19,7 @@ export default function SidebarClient() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">Invoice App</div>
+      <div className="sidebar-header">OML NDIS Invoice app</div>
       <Link href="/calendar" className="nav-link" style={{textAlign: 'left'}}>
         Calendar
       </Link>

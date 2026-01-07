@@ -36,6 +36,7 @@ const CARER_COLORS = [
 export default function CarersClient() {
   const { user, loading: authLoading } = useAuth();
   const [carers, setCarers] = useState<Carer[]>([]);
+  const [missingColorColumn, setMissingColorColumn] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<number | null>(null);
@@ -81,7 +82,21 @@ export default function CarersClient() {
     return () => {
       mounted = false;
     };
-  }, [supabase]);
+  }, [supabase, user]);
+
+  // Check if color column exists (avoid showing warning when list is empty)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { error } = await supabase.from('carers').select('id, color').eq('user_id', user.id).limit(1);
+      if (error) {
+        const msg = (error as any)?.message?.toLowerCase() || '';
+        setMissingColorColumn(msg.includes('column') && msg.includes('color'));
+      } else {
+        setMissingColorColumn(false);
+      }
+    })();
+  }, [supabase, user]);
 
   // Form validation functions
   const validateEmail = (email: string): boolean => {
@@ -592,7 +607,7 @@ export default function CarersClient() {
             Color
           </label>
           <div className="control">
-            {(!carers.length || !('color' in carers[0])) && (
+            {missingColorColumn && (
               <div style={{ 
                 padding: '8px', 
                 backgroundColor: '#fef3c7', 
