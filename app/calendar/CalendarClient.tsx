@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '@/app/lib/supabaseClient'
 import { useCalendarSidebar } from '@/app/CalendarSidebarContext'
+import { useAuth } from '@/app/lib/AuthContext'
 
 interface Shift {
   id: number
@@ -204,6 +205,7 @@ export default function CalendarClient() {
   })
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const { user, loading: authLoading } = useAuth()
 
   // Time conversion utilities (defined early for use in effects)
   const timeStringToMinutes = (timeStr: string) => {
@@ -218,8 +220,18 @@ export default function CalendarClient() {
   }
 
   useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      setIsLoading(false)
+      setCarers([])
+      setLineItemCodes([])
+      setClients([])
+      setShifts([])
+      setRangeShifts([])
+      return
+    }
     fetchData()
-  }, [currentDate, dateFrom, dateTo, selectedClientId, viewMode])
+  }, [authLoading, user, currentDate, dateFrom, dateTo, selectedClientId, viewMode])
 
   // Effect for drag event listeners
   useEffect(() => {
@@ -325,6 +337,11 @@ export default function CalendarClient() {
   const fetchData = async () => {
     try {
       console.log('🔄 Starting fetchData...')
+      if (!user) {
+        console.warn('No user, skipping fetchData')
+        return
+      }
+      setIsLoading(true)
       const supabase = getSupabaseClient()
       console.log('✅ Supabase client created')
       
@@ -352,35 +369,35 @@ export default function CalendarClient() {
       const prevDayYmd = toYmdLocal(prevDay)
 
       const [carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes, footerShiftsRes] = await Promise.all([
-        supabase.from('carers').select('*, color').order('first_name'),
-        supabase.from('line_items').select('id, code, category, description, time_from, time_to, billed_rate, weekday, saturday, sunday, sleepover, public_holiday').order('category'),
-        supabase.from('clients').select('*').order('first_name'),
+        supabase.from('carers').select('*, color').eq('user_id', user.id).order('first_name'),
+        supabase.from('line_items').select('id, code, category, description, time_from, time_to, billed_rate, weekday, saturday, sunday, sleepover, public_holiday').eq('user_id', user.id).order('category'),
+        supabase.from('clients').select('*').eq('user_id', user.id).order('first_name'),
         // Load shifts for the current day
         supabase.from('shifts').select(`
           *, 
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
-        `).eq('shift_date', dayYmd).order('time_from'),
+        `).eq('user_id', user.id).eq('shift_date', dayYmd).order('time_from'),
         // Load shifts from previous day (to catch overnight shifts extending into today)
         supabase.from('shifts').select(`
           *, 
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
-        `).eq('shift_date', prevDayYmd).order('time_from'),
+        `).eq('user_id', user.id).eq('shift_date', prevDayYmd).order('time_from'),
         // Load shifts for week view display
         supabase.from('shifts').select(`
           *,
           carers(id, first_name, last_name, email, color),
           clients(id, first_name, last_name),
           line_items(id, code, category, description, billed_rate, sleepover, public_holiday)
-        `).gte('shift_date', displayRangeFrom).lte('shift_date', displayRangeTo),
+        `).eq('user_id', user.id).gte('shift_date', displayRangeFrom).lte('shift_date', displayRangeTo),
         // Load shifts for footer totals (full date range)
         supabase.from('shifts').select(`
           *,
           carers(id, first_name, last_name, email, color),
           clients(id, first_name, last_name),
           line_items(id, code, category, description, billed_rate, sleepover, public_holiday)
-        `).gte('shift_date', footerRangeFrom).lte('shift_date', footerRangeTo)
+        `).eq('user_id', user.id).gte('shift_date', footerRangeFrom).lte('shift_date', footerRangeTo)
       ])
 
       console.log('📊 Raw responses:', { carersRes, lineItemCodesRes, clientsRes, shiftsRes, prevDayShiftsRes, rangeShiftsRes, footerShiftsRes })
@@ -2446,6 +2463,10 @@ export default function CalendarClient() {
     console.log('🔵 handleSaveShift CALLED - callId:', callId)
     
     try {
+      if (!user) {
+        setError('You must be signed in to save shifts.')
+        return
+      }
       console.log('Starting handleSaveShift - callId:', callId)
       console.log('🔍 handleSaveShift debug:', {
         newShiftClientId: newShift.client_id,
@@ -2574,7 +2595,8 @@ export default function CalendarClient() {
         category: newShift.category, // Save the category directly to the shift
         cost: totalCost,
         is_sleepover: Boolean(newShift.is_sleepover),
-        is_public_holiday: Boolean(newShift.is_public_holiday)
+        is_public_holiday: Boolean(newShift.is_public_holiday),
+        user_id: user.id
       }
       
       console.log('Attempting to save shift with data:', shiftData)
@@ -2588,6 +2610,7 @@ export default function CalendarClient() {
           .from('shifts')
           .update(shiftData)
           .eq('id', editingShift.id)
+          .eq('user_id', user.id)
           .select()
       } else {
         console.log('Creating new shift with data:', shiftData)
@@ -2620,13 +2643,13 @@ export default function CalendarClient() {
           *, 
           carers(id, first_name, last_name, email, color), 
           line_items(id, code, category, description, billed_rate)
-        `).eq('shift_date', toYmdLocal(currentDate)).order('time_from'),
-        supabase.from('clients').select('*'),
+        `).eq('user_id', user.id).eq('shift_date', toYmdLocal(currentDate)).order('time_from'),
+        supabase.from('clients').select('*').eq('user_id', user.id),
         supabase.from('shifts').select(`
           *,
           carers(id, first_name, last_name, email, color),
           line_items(id, code, category, description, billed_rate)
-        `).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
+        `).eq('user_id', user.id).gte('shift_date', rangeFrom).lte('shift_date', rangeTo)
       ])
       
       if (refreshShiftsRes.error) {
