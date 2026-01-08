@@ -1,18 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useAuth } from './lib/AuthContext'
 
 export default function HomePage() {
   const { user, loading } = useAuth()
-  const router = useRouter()
-
-  // If user is signed in, redirect to calendar
-  if (!loading && user) {
-    router.push('/calendar')
-    return null
-  }
 
   return (
     <div style={{
@@ -131,7 +123,7 @@ export default function HomePage() {
         }}>
           Loading...
         </div>
-      ) : (
+      ) : !user ? (
         <div style={{ 
           textAlign: 'center',
           display: 'flex',
@@ -165,6 +157,127 @@ export default function HomePage() {
           }}>
             Create Account
           </Link>
+        </div>
+      ) : (
+        <div style={{ 
+          textAlign: 'center',
+          marginTop: 32,
+          color: '#7dd3fc',
+          fontSize: 18
+        }}>
+          <p style={{ marginBottom: 24 }}>Choose where to go:</p>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            gap: 16,
+            maxWidth: 800,
+            margin: '0 auto'
+          }}>
+            <Link href="/calendar" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              📅 Calendar
+            </Link>
+            <Link href="/shifts" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              🕐 Shifts
+            </Link>
+            <Link href="/invoices" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              🧾 Invoices
+            </Link>
+            <Link href="/reports" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              📊 Reports
+            </Link>
+            <Link href="/carers" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              👥 Carers
+            </Link>
+            <Link href="/clients" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              🏠 Clients
+            </Link>
+            <Link href="/line-item-codes" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              💰 Line Item Codes
+            </Link>
+            <Link href="/settings" style={{
+              display: 'block',
+              padding: '16px',
+              borderRadius: 8,
+              background: '#1e293b',
+              border: '1px solid #334155',
+              color: '#e2e8f0',
+              textDecoration: 'none',
+              fontWeight: 600,
+              transition: 'all 0.2s'
+            }}>
+              ⚙️ Settings
+            </Link>
+          </div>
         </div>
       )}
     </div>
