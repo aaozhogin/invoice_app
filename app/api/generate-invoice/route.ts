@@ -77,11 +77,23 @@ export async function POST(req: Request) {
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-    const { data: carersData, error: carerError } = await supabase
+    // Get authenticated user if userId provided, otherwise proceed without auth (for backward compatibility)
+    let userId: string | undefined = body.userId
+    if (!userId) {
+      const { data: authData } = await supabase.auth.getUser()
+      userId = authData?.user?.id
+    }
+
+    let carersQuery = supabase
       .from('carers')
       .select('*')
       .in('id', carerIds)
-      .eq('user_id', body.userId)
+    
+    if (userId) {
+      carersQuery = carersQuery.eq('user_id', userId)
+    }
+
+    const { data: carersData, error: carerError } = await carersQuery
 
     if (carerError || !carersData?.length) {
       return NextResponse.json({ error: 'Carer not found.' }, { status: 404 })
@@ -89,7 +101,7 @@ export async function POST(req: Request) {
 
     const carers = carersData as Database['public']['Tables']['carers']['Row'][]
 
-    const { data: shiftsData, error: shiftError } = await supabase
+    let shiftsQuery = supabase
       .from('shifts')
       .select(`
         id,
@@ -108,9 +120,16 @@ export async function POST(req: Request) {
       .lte('shift_date', dateTo)
       .neq('category', 'HIREUP')
       .eq('client_id', clientId)
-      .eq('user_id', body.userId)
+    
+    if (userId) {
+      shiftsQuery = shiftsQuery.eq('user_id', userId)
+    }
+    
+    shiftsQuery = shiftsQuery
       .order('shift_date', { ascending: true })
       .order('time_from', { ascending: true })
+
+    const { data: shiftsData, error: shiftError } = await shiftsQuery
 
     if (shiftError) {
       console.error('Failed to load shifts', shiftError)
@@ -131,9 +150,11 @@ export async function POST(req: Request) {
       line_items: { id: number; code: string | null; description: string | null; billed_rate: number | null } | null
     }> | null
 
-    const { data: clientData } = clientId
-      ? await supabase.from('clients').select('*').eq('id', clientId).eq('user_id', body.userId).maybeSingle()
-      : { data: null }
+    let clientQuery = supabase.from('clients').select('*').eq('id', clientId)
+    if (userId) {
+      clientQuery = clientQuery.eq('user_id', userId)
+    }
+    const { data: clientData } = clientId ? await clientQuery.maybeSingle() : { data: null }
 
     const client = clientData as Database['public']['Tables']['clients']['Row'] | null
 
@@ -559,30 +580,39 @@ export async function POST(req: Request) {
       // Use any to bypass type checking issues with invoices table
       const supabase: any = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
       
-      // Check if invoice already exists
-      const { data: existingInvoice } = await supabase
+      // Check if invoice already exists (scope by user if available)
+      let existingQuery = supabase
         .from('invoices')
         .select('*')
-        .eq('user_id', body.userId)
         .eq('invoice_number', invoiceNumber)
         .eq('invoice_date', invoiceDate)
-        .limit(1)
+      
+      if (userId) {
+        existingQuery = existingQuery.eq('user_id', userId)
+      }
+      
+      const { data: existingInvoice } = await existingQuery.limit(1)
       
       // Only insert if it doesn't already exist
       if (!existingInvoice || existingInvoice.length === 0) {
+        const insertData: any = {
+          invoice_number: invoiceNumber,
+          carer_id: carerIds[0],
+          client_id: clientId,
+          date_from: dateFrom,
+          date_to: dateTo,
+          invoice_date: invoiceDate,
+          file_name: filename,
+          file_path: `/api/download-invoice?number=${invoiceNumber}&date=${invoiceDate}`
+        }
+        
+        if (userId) {
+          insertData.user_id = userId
+        }
+        
         const { data, error: invoiceError } = await supabase
           .from('invoices')
-          .insert({
-            user_id: body.userId,
-            invoice_number: invoiceNumber,
-            carer_id: carerIds[0],
-            client_id: clientId,
-            date_from: dateFrom,
-            date_to: dateTo,
-            invoice_date: invoiceDate,
-            file_name: filename,
-            file_path: `/api/download-invoice?number=${invoiceNumber}&date=${invoiceDate}`
-          })
+          .insert(insertData)
           .select()
 
         if (invoiceError) {
