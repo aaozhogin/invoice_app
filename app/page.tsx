@@ -26,9 +26,9 @@ export default function HomePage() {
       margin: '0 auto',
       padding: '48px 24px'
     }}>
-      <h1 style={{ color: '#e2e8f0', fontSize: 28, marginBottom: 12 }}>Invoice App</h1>
+      <h1 style={{ color: '#e2e8f0', fontSize: 28, marginBottom: 12 }}>OML NDIS Invoice App</h1>
       <p style={{ color: '#94a3b8', marginBottom: 24 }}>
-        {loading ? 'Loading your session…' : user ? 'Welcome back! Choose where to go:' : 'Manage NDIS shifts, carers, clients and invoices — sign in to get started.'}
+        {loading ? 'Loading your session…' : user ? 'Welcome back! Choose where to go:' : 'Manage NDIS shifts, carers, clients and invoices for your NDIS participants.'}
       </p>
 
       {loading ? (
