@@ -355,6 +355,7 @@ export default function LineItemCodesClient() {
       max_rate: max as number,
       billed_rate: billed as number,
       rate_offset: offset ?? 0,
+      user_id: user?.id || undefined,
     } as any;
 
     const res = (await supabase.from('line_items').insert([newItem]).select()) as {
@@ -510,7 +511,7 @@ export default function LineItemCodesClient() {
       // Insert new category
       const { data, error } = await supabase
         .from('line_item_categories')
-        .insert([{ name: trimmedName }])
+        .insert([{ name: trimmedName, user_id: user?.id || undefined }])
         .select();
 
       if (error) {

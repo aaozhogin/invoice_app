@@ -20,10 +20,31 @@ export async function DELETE(req: Request) {
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+    const { data: existing, error: fetchError } = await supabase
+      .from('invoices')
+      .select('user_id')
+      .eq('id', invoiceId)
+      .maybeSingle()
+
+    if (fetchError) {
+      console.error('Supabase fetch error:', fetchError)
+      return NextResponse.json({ error: fetchError.message }, { status: 400 })
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser()
+    if (authError || !authData?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (existing && existing.user_id && existing.user_id !== authData.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { error } = await supabase
       .from('invoices')
       .delete()
       .eq('id', invoiceId)
+      .eq('user_id', authData.user.id)
 
     if (error) {
       console.error('Supabase error:', error)

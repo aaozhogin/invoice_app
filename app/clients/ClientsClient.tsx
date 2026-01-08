@@ -78,8 +78,13 @@ export default function ClientsClient() {
 
   // Load clients from database
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setClients([]);
+      return;
+    }
     loadClients();
-  }, []);
+  }, [authLoading, user]);
 
   const loadClients = async () => {
     if (!user) return;
@@ -103,18 +108,31 @@ export default function ClientsClient() {
 
   const handleAdd = async () => {
     if (!isFormValid) return;
+    if (!user) {
+      alert('You must be signed in to add a client.');
+      return;
+    }
+    if (!user.id) {
+      alert('ERROR: User ID is not available. Please sign out and sign back in.');
+      console.error('User ID missing:', { user, authLoading });
+      return;
+    }
 
     const clientData = {
       first_name: form.firstName.trim(),
       last_name: form.lastName.trim(),
       ndis_number: parseInt(form.ndisNumber.trim()),
       address: form.address.trim(),
+      user_id: user.id,
     };
+    console.log('Inserting client with user_id:', clientData.user_id);
 
     const { data, error } = await supabase
       .from('clients')
       .insert([clientData])
       .select();
+
+    console.log('Client insert result:', { data, error, sentUserId: clientData.user_id });
 
     if (error) {
       console.error('Insert error:', error);
@@ -123,6 +141,7 @@ export default function ClientsClient() {
     }
 
     if (data && data[0]) {
+      console.log('Client inserted, user_id in response:', data[0].user_id);
       setClients(prev => [...prev, data[0]]);
     }
     

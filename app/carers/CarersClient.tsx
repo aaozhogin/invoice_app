@@ -66,13 +66,19 @@ export default function CarersClient() {
 
   const [supabase] = useState(() => getSupabaseClient());
 
-  // Fetch carers on component mount
+  // Fetch carers when auth is ready; clear list on sign-out
   useEffect(() => {
-    if (!user) return;
+    if (authLoading) return;
+    if (!user) {
+      setCarers([]);
+      return;
+    }
     let mounted = true;
     (async () => {
+      console.log('Fetching carers for user:', user.id);
       const res = await supabase.from('carers').select('*').eq('user_id', user.id).order('last_name', { ascending: true });
       const { data, error } = res;
+      console.log('Carers fetch result:', { data, error, count: data?.length });
       if (error) {
         console.error('Fetch error:', error);
       } else if (mounted) {
@@ -82,10 +88,11 @@ export default function CarersClient() {
     return () => {
       mounted = false;
     };
-  }, [supabase, user]);
+  }, [supabase, user, authLoading]);
 
   // Check if color column exists (avoid showing warning when list is empty)
   useEffect(() => {
+    if (authLoading) return;
     if (!user) return;
     (async () => {
       const { error } = await supabase.from('carers').select('id, color').eq('user_id', user.id).limit(1);
@@ -96,7 +103,7 @@ export default function CarersClient() {
         setMissingColorColumn(false);
       }
     })();
-  }, [supabase, user]);
+  }, [supabase, user, authLoading]);
 
   // Form validation functions
   const validateEmail = (email: string): boolean => {
@@ -213,6 +220,15 @@ export default function CarersClient() {
 
   const handleAdd = async () => {
     if (!isFormValid) return;
+    if (!user) {
+      alert('You must be signed in to add a carer.');
+      return;
+    }
+    if (!user.id) {
+      alert('ERROR: User ID is not available. Please sign out and sign back in.');
+      console.error('User ID missing:', { user, authLoading });
+      return;
+    }
 
     let logoUrl: string | null = null;
     if (logoFile) {
@@ -231,7 +247,9 @@ export default function CarersClient() {
       bsb: form.bsb.trim(),
       account_number: form.accountNumber.trim(),
       logo_url: logoUrl,
+      user_id: user.id,
     };
+    console.log('Inserting carer with user_id:', carerData.user_id);
 
     // Only include color if we know the column exists
     if (carers.length > 0 && 'color' in carers[0]) {
@@ -243,6 +261,8 @@ export default function CarersClient() {
       .insert([carerData])
       .select();
 
+    console.log('Carer insert result:', { data, error, carerData });
+
     if (error) {
       console.error('Insert error:', error);
       alert('Failed to add carer: ' + error.message);
@@ -250,7 +270,10 @@ export default function CarersClient() {
     }
 
     if (data && data[0]) {
+      console.log('Adding carer to local state:', data[0]);
       setCarers(prev => [...prev, data[0]]);
+    } else {
+      console.warn('Insert succeeded but no data returned');
     }
     
     setFormVisible(false);

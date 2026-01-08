@@ -6,6 +6,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 interface SaveInvoiceRequest {
+  userId?: string
   invoiceNumber: string
   carerId: number
   clientId: number
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     const { data, error } = await supabase
       .from('invoices')
       .insert({
+        user_id: body.userId,
         invoice_number: body.invoiceNumber,
         carer_id: body.carerId,
         client_id: body.clientId,

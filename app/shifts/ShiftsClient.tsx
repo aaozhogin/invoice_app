@@ -379,6 +379,7 @@ export default function ShiftsClient() {
         cost: totalCost,
         client_id: form.clientId ? parseInt(form.clientId) : null,
         category: form.category,
+        user_id: user?.id || undefined,
       };
 
       const { data, error } = await supabase.from('shifts').insert(shiftData).select();

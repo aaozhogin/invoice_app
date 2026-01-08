@@ -3082,6 +3082,7 @@ export default function CalendarClient() {
         const fallbackDate = toYmdLocal(currentDate)
         const timezoneOffset = new Date().getTimezoneOffset() // Browser's UTC offset in minutes
         const payload = {
+          userId: user?.id,
           invoiceDate: invoiceDate || fallbackDate,
           invoiceNumber: invoiceNumber.trim(),
           carerIds: invoiceCarerIds,

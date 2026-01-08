@@ -9,6 +9,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 interface InvoiceRequestBody {
+  userId?: string
   invoiceDate: string
   invoiceNumber: string
   carerId?: number
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
       .from('carers')
       .select('*')
       .in('id', carerIds)
+      .eq('user_id', body.userId)
 
     if (carerError || !carersData?.length) {
       return NextResponse.json({ error: 'Carer not found.' }, { status: 404 })
@@ -106,6 +108,7 @@ export async function POST(req: Request) {
       .lte('shift_date', dateTo)
       .neq('category', 'HIREUP')
       .eq('client_id', clientId)
+      .eq('user_id', body.userId)
       .order('shift_date', { ascending: true })
       .order('time_from', { ascending: true })
 
@@ -129,7 +132,7 @@ export async function POST(req: Request) {
     }> | null
 
     const { data: clientData } = clientId
-      ? await supabase.from('clients').select('*').eq('id', clientId).maybeSingle()
+      ? await supabase.from('clients').select('*').eq('id', clientId).eq('user_id', body.userId).maybeSingle()
       : { data: null }
 
     const client = clientData as Database['public']['Tables']['clients']['Row'] | null
@@ -560,6 +563,7 @@ export async function POST(req: Request) {
       const { data: existingInvoice } = await supabase
         .from('invoices')
         .select('*')
+        .eq('user_id', body.userId)
         .eq('invoice_number', invoiceNumber)
         .eq('invoice_date', invoiceDate)
         .limit(1)
@@ -569,6 +573,7 @@ export async function POST(req: Request) {
         const { data, error: invoiceError } = await supabase
           .from('invoices')
           .insert({
+            user_id: body.userId,
             invoice_number: invoiceNumber,
             carer_id: carerIds[0],
             client_id: clientId,
