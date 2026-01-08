@@ -55,7 +55,7 @@ export default function SidebarClient() {
             Line Item Codes
           </Link>
           <Link href="/google-calendar-sync" className="nav-link nav-sub" style={{textAlign: 'left'}}>
-            Google Calendar Sync
+            Google Calendar Sync (coming soon)
           </Link>
         </>
       )}

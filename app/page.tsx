@@ -100,19 +100,6 @@ export default function HomePage() {
             Export data for accounting and reconciliation.
           </p>
         </div>
-
-        <div style={{
-          backgroundColor: '#1e293b',
-          padding: 24,
-          borderRadius: 12,
-          border: '1px solid #334155'
-        }}>
-          <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>🔒 Secure & Multi-User</h3>
-          <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
-            Each user's data is completely isolated with row-level security. 
-            Email verification, password recovery, and secure authentication built-in.
-          </p>
-        </div>
       </div>
 
       {loading ? (
@@ -263,19 +250,6 @@ export default function HomePage() {
               transition: 'all 0.2s'
             }}>
               💰 Line Item Codes
-            </Link>
-            <Link href="/settings" style={{
-              display: 'block',
-              padding: '16px',
-              borderRadius: 8,
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#e2e8f0',
-              textDecoration: 'none',
-              fontWeight: 600,
-              transition: 'all 0.2s'
-            }}>
-              ⚙️ Settings
             </Link>
           </div>
         </div>

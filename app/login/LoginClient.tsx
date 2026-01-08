@@ -31,7 +31,7 @@ export default function LoginClient() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: '#0f172a',
       padding: '20px'
     }}>
       <div style={{
