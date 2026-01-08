@@ -16,7 +16,8 @@ export default function HomePage() {
         color: '#e2e8f0', 
         fontSize: 36, 
         marginBottom: 16,
-        fontWeight: 700
+        fontWeight: 700,
+        textAlign: 'center'
       }}>
         OML NDIS Invoice App
       </h1>
@@ -25,7 +26,8 @@ export default function HomePage() {
         color: '#94a3b8', 
         fontSize: 18,
         marginBottom: 32,
-        lineHeight: 1.6
+        lineHeight: 1.6,
+        textAlign: 'center'
       }}>
         Comprehensive invoicing and shift management solution for NDIS service providers
       </p>
@@ -34,7 +36,8 @@ export default function HomePage() {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: 24,
-        marginBottom: 48
+        marginBottom: 48,
+        justifyItems: 'center'
       }}>
         <div style={{
           backgroundColor: '#1e293b',
