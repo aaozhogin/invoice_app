@@ -15,7 +15,7 @@ function AuthCallbackContent() {
   useEffect(() => {
     const supabase = getSupabaseClient()
     const code = searchParams.get('code')
-    const next = searchParams.get('next') || '/calendar'
+    const next = searchParams.get('next') || '/'
 
     async function handleCallback() {
       try {

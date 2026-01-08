@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     
     if (!error) {
-      router.push('/calendar')
+      router.push('/')
     }
     
     return { error }
