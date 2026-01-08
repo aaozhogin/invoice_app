@@ -19,7 +19,9 @@ export default function SidebarClient() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">OML NDIS Invoice app</div>
+      <Link href="/" className="sidebar-header-link">
+        <div className="sidebar-header">OML NDIS Invoice app</div>
+      </Link>
       <Link href="/calendar" className="nav-link" style={{textAlign: 'left'}}>
         Calendar
       </Link>
@@ -74,9 +76,20 @@ export default function SidebarClient() {
           padding: 20px;
           font-size: 1.5em;
           font-weight: bold;
-          border-bottom: 1px solid var(--border);
           color: var(--text);
           text-align: left;
+        }
+        
+        .sidebar-header-link {
+          text-decoration: none;
+          color: inherit;
+          display: block;
+          border-bottom: 1px solid var(--border);
+          transition: background-color 0.2s;
+        }
+        
+        .sidebar-header-link:hover {
+          background-color: var(--surface-hover);
         }
         
         .nav-link {
