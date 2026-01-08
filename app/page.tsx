@@ -33,17 +33,20 @@ export default function HomePage() {
       </p>
 
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
         gap: 24,
-        marginBottom: 48,
-        justifyItems: 'center'
+        marginBottom: 48
       }}>
         <div style={{
           backgroundColor: '#1e293b',
           padding: 24,
           borderRadius: 12,
-          border: '1px solid #334155'
+          border: '1px solid #334155',
+          minWidth: 280,
+          maxWidth: 320,
+          flex: '1 1 280px'
         }}>
           <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>📅 Calendar & Shifts</h3>
           <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
@@ -56,7 +59,10 @@ export default function HomePage() {
           backgroundColor: '#1e293b',
           padding: 24,
           borderRadius: 12,
-          border: '1px solid #334155'
+          border: '1px solid #334155',
+          minWidth: 280,
+          maxWidth: 320,
+          flex: '1 1 280px'
         }}>
           <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>👥 Carers & Clients</h3>
           <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
@@ -69,7 +75,10 @@ export default function HomePage() {
           backgroundColor: '#1e293b',
           padding: 24,
           borderRadius: 12,
-          border: '1px solid #334155'
+          border: '1px solid #334155',
+          minWidth: 280,
+          maxWidth: 320,
+          flex: '1 1 280px'
         }}>
           <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>💰 NDIS Line Items</h3>
           <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
@@ -82,7 +91,10 @@ export default function HomePage() {
           backgroundColor: '#1e293b',
           padding: 24,
           borderRadius: 12,
-          border: '1px solid #334155'
+          border: '1px solid #334155',
+          minWidth: 280,
+          maxWidth: 320,
+          flex: '1 1 280px'
         }}>
           <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>🧾 Invoice Generation</h3>
           <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
@@ -95,7 +107,10 @@ export default function HomePage() {
           backgroundColor: '#1e293b',
           padding: 24,
           borderRadius: 12,
-          border: '1px solid #334155'
+          border: '1px solid #334155',
+          minWidth: 280,
+          maxWidth: 320,
+          flex: '1 1 280px'
         }}>
           <h3 style={{ color: '#7dd3fc', marginBottom: 12, fontSize: 20 }}>📊 Reports</h3>
           <p style={{ color: '#cbd5e1', lineHeight: 1.6 }}>
@@ -157,8 +172,9 @@ export default function HomePage() {
         }}>
           <p style={{ marginBottom: 24 }}>Choose where to go:</p>
           <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
             gap: 16,
             maxWidth: 800,
             margin: '0 auto'
@@ -172,7 +188,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               📅 Calendar
             </Link>
@@ -185,7 +205,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               🕐 Shifts
             </Link>
@@ -198,7 +222,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               🧾 Invoices
             </Link>
@@ -211,7 +239,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               📊 Reports
             </Link>
@@ -224,7 +256,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               👥 Carers
             </Link>
@@ -237,7 +273,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               🏠 Clients
             </Link>
@@ -250,7 +290,11 @@ export default function HomePage() {
               color: '#e2e8f0',
               textDecoration: 'none',
               fontWeight: 600,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              minWidth: 180,
+              textAlign: 'center',
+              flex: '1 1 180px',
+              maxWidth: 220
             }}>
               💰 Line Item Codes
             </Link>
