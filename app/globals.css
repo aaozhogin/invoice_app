@@ -159,14 +159,13 @@ img, svg {
 
 /* App shell layout (left-hand menu) */
 .app-shell {
-  display: flex;
   min-height: 100vh;
   position: relative;
 }
 
 .sidebar {
-  width: max-content;
-  min-width: max-content;
+  width: 280px;
+  min-width: 280px;
   padding: 20px;
   border-right: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));
@@ -387,9 +386,8 @@ img, svg {
 }
 
 .main {
-  flex: 1;
   padding: 0;
-  padding-left: 250px;
+  padding-left: 280px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
