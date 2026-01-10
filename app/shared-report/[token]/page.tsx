@@ -382,6 +382,7 @@ export default function SharedReportPage() {
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', width: '40px' }}>Seq</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', minWidth: '200px' }}>Category</th>
                     {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
                       <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
@@ -394,17 +395,18 @@ export default function SharedReportPage() {
                 <tbody>
                   {categoryReports.map((cat, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px 6px', textAlign: 'center' }}>{idx + 1}</td>
                       <td style={{ padding: '8px 12px' }}>{cat.category}</td>
-                      {Object.keys(cat.monthlyData).sort().map(monthKey => (
+                      {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
                         <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
-                          {cat.monthlyData[monthKey].cost > 0 ? `$${cat.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
+                          {cat.monthlyData[monthKey] && cat.monthlyData[monthKey].cost > 0 ? `$${cat.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
                         </td>
                       ))}
                       <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600' }}>${cat.cost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td style={{ padding: '8px 12px' }}>TOTAL</td>
+                    <td colSpan={2} style={{ padding: '8px 12px' }}>TOTAL</td>
                     {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => {
                       const monthTotal = categoryReports.reduce((sum, cat) => sum + (cat.monthlyData[monthKey]?.cost || 0), 0)
                       return (
@@ -420,10 +422,10 @@ export default function SharedReportPage() {
             </div>
             
             {categoryReports.length > 0 && (
-              <div style={{ marginTop: '40px', display: 'flex', gap: '40px' }}>
+              <div style={{ marginTop: '40px', display: 'flex', gap: '60px', alignItems: 'flex-start' }}>
                 <div>
                   <h3 style={{ marginBottom: '20px' }}>Category Budget Distribution</h3>
-                  <svg viewBox="0 0 200 200" style={{ width: '250px', height: '250px' }}>
+                  <svg viewBox="0 0 200 200" style={{ width: '400px', height: '400px' }}>
                     {(() => {
                       const total = categoryReports.reduce((sum, cat) => sum + cat.cost, 0)
                       let currentAngle = -90
@@ -457,7 +459,7 @@ export default function SharedReportPage() {
                     })()}
                   </svg>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'flex-start', paddingTop: '60px' }}>
                   {categoryReports.map((cat, idx) => {
                     const total = categoryReports.reduce((sum, c) => sum + c.cost, 0)
                     const percentage = ((cat.cost / total) * 100).toFixed(1)
