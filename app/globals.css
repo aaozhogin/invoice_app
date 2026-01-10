@@ -389,13 +389,13 @@ img, svg {
 .main {
   flex: 1;
   padding: 0;
+  padding-left: 250px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   overflow: auto;
   width: 100%;
   min-height: 100vh;
-  margin-left: auto;
 }
 
 /* --- Invisible table form layout (override earlier rules) --- */
