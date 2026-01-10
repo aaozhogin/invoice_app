@@ -28,6 +28,7 @@ interface Shift {
   cost: number
   shift_date: string
   category?: string | null
+  line_item_code_id?: string | number | null
   carers?: { id: number; first_name: string; last_name: string }
 }
 
@@ -129,38 +130,52 @@ export default function SharedReportPage() {
 
   const processLineItemsReport = (lineItemsReport: any, dateFrom: string, dateTo: string) => {
     const { shifts, lineItems } = lineItemsReport
+    
+    // Build a map of line items by ID
     const lineItemMap = new Map<string, LineItem>(lineItems.map((li: LineItem) => [li.id, li]))
 
-    const lineTotals = new Map<string, { hours: number; cost: number; description: string; category: string }>()
+    // Group shifts by line item code ID
+    const lineItemTotals = new Map<string, { hours: number; cost: number; code: string; category: string; description: string }>()
 
     shifts.forEach((shift: Shift) => {
-      const key = shift.id.toString()
-      if (!lineTotals.has(key)) {
-        const li = lineItemMap.get(key)
-        lineTotals.set(key, {
-          hours: 0,
-          cost: 0,
-          description: li?.description || 'Unknown',
-          category: li?.category || 'Uncategorized'
-        })
-      }
+      // Get the line item code ID from the shift
+      const codeId = shift.line_item_code_id ? String(shift.line_item_code_id) : null
+      
+      if (!codeId) return
 
       const timeFrom = new Date(shift.time_from)
       const timeTo = new Date(shift.time_to)
       const hours = (timeTo.getTime() - timeFrom.getTime()) / (1000 * 60 * 60)
 
-      const total = lineTotals.get(key)!
+      if (!lineItemTotals.has(codeId)) {
+        const lineItem = lineItemMap.get(codeId)
+        lineItemTotals.set(codeId, {
+          hours: 0,
+          cost: 0,
+          code: lineItem?.code || codeId,
+          category: lineItem?.category || 'Uncategorized',
+          description: lineItem?.description || ''
+        })
+      }
+
+      const total = lineItemTotals.get(codeId)!
       total.hours += hours
       total.cost += shift.cost
     })
 
-    const reports = Array.from(lineTotals.entries()).map(([, total]) => ({
-      code: '',
-      category: total.category,
-      description: total.description,
-      hours: total.hours,
-      cost: total.cost
-    }))
+    const reports = Array.from(lineItemTotals.entries())
+      .map(([, total]) => ({
+        code: total.code,
+        category: total.category,
+        description: total.description,
+        hours: Math.round(total.hours * 100) / 100,
+        cost: Math.round(total.cost * 100) / 100
+      }))
+      .sort((a, b) => {
+        const categoryCompare = a.category.localeCompare(b.category)
+        if (categoryCompare !== 0) return categoryCompare
+        return b.hours - a.hours
+      })
 
     setLineItemReports(reports)
   }
