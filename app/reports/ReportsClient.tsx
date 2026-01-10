@@ -9,6 +9,7 @@ interface CarerReport {
   carerName: string
   shiftHours: number
   totalCost: number
+  color: string
 }
 
 interface LineItemReport {
@@ -58,6 +59,7 @@ export default function ReportsClient() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [categoryReports, setCategoryReports] = useState<CategoryReport[]>([])
   const [loading, setLoading] = useState(true)
+  const [carerColorsMap, setCarerColorsMap] = useState<Map<number, string>>(new Map())
 
   // Load dates from localStorage on mount
   useEffect(() => {
@@ -104,6 +106,15 @@ export default function ReportsClient() {
           const { data: carersData } = await supabase.from('carers').select('*').eq('user_id', user.id)
           const { data: lineItemsData } = await supabase.from('line_items').select('*').eq('user_id', user.id)
 
+          // Build color map from carers data
+          const colorMap = new Map<number, string>()
+          if (carersData) {
+            carersData.forEach(carer => {
+              colorMap.set(carer.id, carer.color || '#22c55e')
+            })
+          }
+          setCarerColorsMap(colorMap)
+
           const enrichedShifts = shiftsData.map(shift => ({
             ...shift,
             carers: carersData?.find(c => c.id === shift.carer_id),
@@ -141,11 +152,11 @@ export default function ReportsClient() {
   // Separate effect to recalculate reports when shifts or hireupMapping changes
   useEffect(() => {
     if (shifts.length > 0) {
-      calculateReports(shifts, hireupMapping)
+      calculateReports(shifts, hireupMapping, carerColorsMap)
     }
-  }, [shifts, hireupMapping, lineItemCodes])
+  }, [shifts, hireupMapping, lineItemCodes, carerColorsMap])
 
-  const calculateReports = (shiftsData: Shift[], hireupCode: string) => {
+  const calculateReports = (shiftsData: Shift[], hireupCode: string, colorMap: Map<number, string>) => {
     // Calculate carer reports
     const carerMap = new Map<number, { hours: number; cost: number; name: string }>()
     const categoryMap = new Map<string, { hours: number; cost: number }>()
@@ -173,7 +184,8 @@ export default function ReportsClient() {
       carerId,
       carerName: data.name,
       shiftHours: Math.round(data.hours * 100) / 100,
-      totalCost: Math.round(data.cost * 100) / 100
+      totalCost: Math.round(data.cost * 100) / 100,
+      color: colorMap.get(carerId) || '#22c55e'
     }))
 
     setCarerReports(carerReportArray)
@@ -365,10 +377,6 @@ export default function ReportsClient() {
                   <svg viewBox="0 0 300 300" className="reports-pie-svg">
                     {(() => {
                       let currentAngle = -90
-                      const colors = [
-                        '#3b82f6', '#ef4444', '#22c55e', '#f97316',
-                        '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
-                      ]
                       
                       return carerReports.map((carer, idx) => {
                         const sliceAngle = (carer.shiftHours / carerTotalHours) * 360
@@ -406,7 +414,7 @@ export default function ReportsClient() {
                           <g key={idx}>
                             <path
                               d={path}
-                              fill={colors[idx % colors.length]}
+                              fill={carer.color}
                               stroke="var(--card)"
                               strokeWidth="2"
                             />
@@ -433,15 +441,11 @@ export default function ReportsClient() {
                 <div className="reports-chart-legend">
                   {carerReports.map((carer, idx) => {
                     const percentage = (carer.shiftHours / carerTotalHours) * 100
-                    const colors = [
-                      '#3b82f6', '#ef4444', '#22c55e', '#f97316',
-                      '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
-                    ]
                     return (
                       <div key={idx} className="reports-legend-item">
                         <span 
                           className="reports-legend-color" 
-                          style={{ backgroundColor: colors[idx % colors.length] }}
+                          style={{ backgroundColor: carer.color }}
                         />
                         <span className="reports-legend-text">
                           {carer.carerName}: {percentage.toFixed(1)}%
@@ -458,10 +462,6 @@ export default function ReportsClient() {
                   <svg viewBox="0 0 300 300" className="reports-pie-svg">
                     {(() => {
                       let currentAngle = -90
-                      const colors = [
-                        '#3b82f6', '#ef4444', '#22c55e', '#f97316',
-                        '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
-                      ]
                       
                       return carerReports.map((carer, idx) => {
                         const sliceAngle = (carer.totalCost / carerTotalCost) * 360
@@ -499,7 +499,7 @@ export default function ReportsClient() {
                           <g key={idx}>
                             <path
                               d={path}
-                              fill={colors[idx % colors.length]}
+                              fill={carer.color}
                               stroke="var(--card)"
                               strokeWidth="2"
                             />
@@ -526,15 +526,11 @@ export default function ReportsClient() {
                 <div className="reports-chart-legend">
                   {carerReports.map((carer, idx) => {
                     const percentage = (carer.totalCost / carerTotalCost) * 100
-                    const colors = [
-                      '#3b82f6', '#ef4444', '#22c55e', '#f97316',
-                      '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'
-                    ]
                     return (
                       <div key={idx} className="reports-legend-item">
                         <span 
                           className="reports-legend-color" 
-                          style={{ backgroundColor: colors[idx % colors.length] }}
+                          style={{ backgroundColor: carer.color }}
                         />
                         <span className="reports-legend-text">
                           {carer.carerName}: {percentage.toFixed(1)}%
