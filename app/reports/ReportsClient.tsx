@@ -10,6 +10,7 @@ interface CarerReport {
   shiftHours: number
   totalCost: number
   color: string
+  monthlyData?: { [monthKey: string]: { hours: number; cost: number } }
 }
 
 interface LineItemReport {
@@ -31,6 +32,7 @@ interface CategoryReport {
   category: string
   hours: number
   cost: number
+  monthlyData?: { [monthKey: string]: { hours: number; cost: number } }
 }
 
 interface Shift {
@@ -156,37 +158,85 @@ export default function ReportsClient() {
     }
   }, [shifts, hireupMapping, lineItemCodes, carerColorsMap])
 
+  // Helper to generate month keys from date range
+  const getMonthKeys = (): string[] => {
+    if (!dateFrom || !dateTo) return []
+    
+    const months: string[] = []
+    const start = new Date(dateFrom)
+    const end = new Date(dateTo)
+    
+    const current = new Date(start.getFullYear(), start.getMonth(), 1)
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1)
+    
+    while (current <= endMonth) {
+      const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+      months.push(monthKey)
+      current.setMonth(current.getMonth() + 1)
+    }
+    
+    return months
+  }
+
+  const formatMonthKey = (monthKey: string): string => {
+    const [year, month] = monthKey.split('-')
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1)
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  }
+
   const calculateReports = (shiftsData: Shift[], hireupCode: string, colorMap: Map<number, string>) => {
-    // Calculate carer reports
-    const carerMap = new Map<number, { hours: number; cost: number; name: string }>()
-    const categoryMap = new Map<string, { hours: number; cost: number }>()
+    // Calculate carer reports with monthly breakdown
+    const carerMap = new Map<number, { hours: number; cost: number; name: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
+    const categoryMap = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shiftsData.forEach(shift => {
       if (!shift.carers) return
       
       const duration = calculateDuration(shift.time_from, shift.time_to)
       const key = shift.carer_id
+      const shiftDate = new Date(shift.shift_date)
+      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
       
       if (!carerMap.has(key)) {
         carerMap.set(key, {
           hours: 0,
           cost: 0,
-          name: `${shift.carers.first_name} ${shift.carers.last_name}`
+          name: `${shift.carers.first_name} ${shift.carers.last_name}`,
+          monthlyData: new Map()
         })
       }
       
       const current = carerMap.get(key)!
       current.hours += duration
       current.cost += shift.cost || 0
+      
+      // Add to monthly data
+      if (!current.monthlyData.has(monthKey)) {
+        current.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const monthData = current.monthlyData.get(monthKey)!
+      monthData.hours += duration
+      monthData.cost += shift.cost || 0
     })
 
-    const carerReportArray = Array.from(carerMap.entries()).map(([carerId, data]) => ({
-      carerId,
-      carerName: data.name,
-      shiftHours: Math.round(data.hours * 100) / 100,
-      totalCost: Math.round(data.cost * 100) / 100,
-      color: colorMap.get(carerId) || '#22c55e'
-    }))
+    const carerReportArray = Array.from(carerMap.entries()).map(([carerId, data]) => {
+      const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+      data.monthlyData.forEach((value, key) => {
+        monthlyDataObj[key] = {
+          hours: Math.round(value.hours * 100) / 100,
+          cost: Math.round(value.cost * 100) / 100
+        }
+      })
+      
+      return {
+        carerId,
+        carerName: data.name,
+        shiftHours: Math.round(data.hours * 100) / 100,
+        totalCost: Math.round(data.cost * 100) / 100,
+        color: colorMap.get(carerId) || '#22c55e',
+        monthlyData: monthlyDataObj
+      }
+    })
 
     setCarerReports(carerReportArray)
 
@@ -224,12 +274,24 @@ export default function ReportsClient() {
       current.hours += duration
       current.cost += shift.cost || 0
 
+      // Track category data with monthly breakdown
+      const shiftDate = new Date(shift.shift_date)
+      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      
       if (!categoryMap.has(categoryName)) {
-        categoryMap.set(categoryName, { hours: 0, cost: 0 })
+        categoryMap.set(categoryName, { hours: 0, cost: 0, monthlyData: new Map() })
       }
       const categoryBucket = categoryMap.get(categoryName)!
       categoryBucket.hours += duration
       categoryBucket.cost += shift.cost || 0
+      
+      // Add to monthly data
+      if (!categoryBucket.monthlyData.has(monthKey)) {
+        categoryBucket.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const categoryMonthData = categoryBucket.monthlyData.get(monthKey)!
+      categoryMonthData.hours += duration
+      categoryMonthData.cost += shift.cost || 0
     })
 
     const lineItemReportArray = Array.from(lineItemMap.entries())
@@ -247,11 +309,22 @@ export default function ReportsClient() {
       })
 
     const categoryReportArray = Array.from(categoryMap.entries())
-      .map(([category, data]) => ({
-        category,
-        hours: Math.round(data.hours * 100) / 100,
-        cost: Math.round(data.cost * 100) / 100
-      }))
+      .map(([category, data]) => {
+        const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+        data.monthlyData.forEach((value, key) => {
+          monthlyDataObj[key] = {
+            hours: Math.round(value.hours * 100) / 100,
+            cost: Math.round(value.cost * 100) / 100
+          }
+        })
+        
+        return {
+          category,
+          hours: Math.round(data.hours * 100) / 100,
+          cost: Math.round(data.cost * 100) / 100,
+          monthlyData: monthlyDataObj
+        }
+      })
       .sort((a, b) => b.cost - a.cost)
 
     setLineItemReports(lineItemReportArray)
@@ -331,14 +404,18 @@ export default function ReportsClient() {
                   <tr>
                     <th>Seq</th>
                     <th>Carer Name</th>
-                    <th>Hours</th>
-                    <th>Total Cost</th>
+                    {getMonthKeys().map(monthKey => (
+                      <th key={monthKey} style={{ textAlign: 'right' }}>
+                        {formatMonthKey(monthKey)}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {carerReports.length === 0 ? (
                     <tr>
-                      <td colSpan={4} style={{ textAlign: 'center' }}>
+                      <td colSpan={3 + getMonthKeys().length} style={{ textAlign: 'center' }}>
                         No data for selected period
                       </td>
                     </tr>
@@ -348,18 +425,35 @@ export default function ReportsClient() {
                         <tr key={carer.carerId}>
                           <td>{idx + 1}</td>
                           <td>{carer.carerName}</td>
-                          <td>{carer.shiftHours.toFixed(2)}</td>
-                          <td>${carer.totalCost.toFixed(2)}</td>
+                          {getMonthKeys().map(monthKey => {
+                            const monthData = carer.monthlyData?.[monthKey]
+                            return (
+                              <td key={monthKey} style={{ textAlign: 'right' }}>
+                                {monthData ? `$${monthData.cost.toFixed(2)}` : '-'}
+                              </td>
+                            )
+                          })}
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                            ${carer.totalCost.toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                       <tr className="reports-total-row">
                         <td colSpan={2} style={{ fontWeight: 'bold' }}>
                           TOTAL
                         </td>
-                        <td style={{ fontWeight: 'bold' }}>
-                          {carerTotalHours.toFixed(2)}
-                        </td>
-                        <td style={{ fontWeight: 'bold' }}>
+                        {getMonthKeys().map(monthKey => {
+                          const monthTotal = carerReports.reduce((sum, carer) => {
+                            const monthData = carer.monthlyData?.[monthKey]
+                            return sum + (monthData?.cost || 0)
+                          }, 0)
+                          return (
+                            <td key={monthKey} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                              ${monthTotal.toFixed(2)}
+                            </td>
+                          )
+                        })}
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                           ${carerTotalCost.toFixed(2)}
                         </td>
                       </tr>
@@ -658,14 +752,18 @@ export default function ReportsClient() {
                   <tr>
                     <th>Seq</th>
                     <th>Category</th>
-                    <th>Hours</th>
-                    <th>Cost</th>
+                    {getMonthKeys().map(monthKey => (
+                      <th key={monthKey} style={{ textAlign: 'right' }}>
+                        {formatMonthKey(monthKey)}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryReports.length === 0 ? (
                     <tr>
-                      <td colSpan={4} style={{ textAlign: 'center' }}>
+                      <td colSpan={3 + getMonthKeys().length} style={{ textAlign: 'center' }}>
                         No data for selected period
                       </td>
                     </tr>
@@ -675,18 +773,35 @@ export default function ReportsClient() {
                         <tr key={`${item.category}-${idx}`}>
                           <td>{idx + 1}</td>
                           <td>{item.category}</td>
-                          <td>{item.hours.toFixed(2)}</td>
-                          <td>${item.cost.toFixed(2)}</td>
+                          {getMonthKeys().map(monthKey => {
+                            const monthData = item.monthlyData?.[monthKey]
+                            return (
+                              <td key={monthKey} style={{ textAlign: 'right' }}>
+                                {monthData ? `$${monthData.cost.toFixed(2)}` : '-'}
+                              </td>
+                            )
+                          })}
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                            ${item.cost.toFixed(2)}
+                          </td>
                         </tr>
                       ))}
                       <tr className="reports-total-row">
                         <td colSpan={2} style={{ fontWeight: 'bold' }}>
                           TOTAL
                         </td>
-                        <td style={{ fontWeight: 'bold' }}>
-                          {categoryTotalHours.toFixed(2)}
-                        </td>
-                        <td style={{ fontWeight: 'bold' }}>
+                        {getMonthKeys().map(monthKey => {
+                          const monthTotal = categoryReports.reduce((sum, cat) => {
+                            const monthData = cat.monthlyData?.[monthKey]
+                            return sum + (monthData?.cost || 0)
+                          }, 0)
+                          return (
+                            <td key={monthKey} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                              ${monthTotal.toFixed(2)}
+                            </td>
+                          )
+                        })}
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
                           ${categoryTotalCost.toFixed(2)}
                         </td>
                       </tr>
