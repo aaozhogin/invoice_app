@@ -4,6 +4,7 @@ import { Database } from '@/app/lib/types/supabase'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
 export async function GET(req: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -20,7 +21,8 @@ export async function GET(req: NextRequest) {
 
     console.log('Looking for share token:', shareToken)
 
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+    // Use service role key to read shared reports (bypasses RLS)
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY)
 
     // Get the shared report by token (public access, no auth required)
     const { data: sharedReport, error: reportError } = await supabase
