@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation'
 import '../../../app/globals.css'
 
 interface CarerReport {
+  seq: number
   carerId: number
   carerName: string
   shiftHours: number
   totalCost: number
   color: string
+  monthlyData: { [key: string]: { hours: number; cost: number } }
 }
 
 interface LineItemReport {
@@ -19,6 +21,7 @@ interface LineItemReport {
   description: string
   hours: number
   cost: number
+  monthlyData: { [key: string]: { hours: number; cost: number } }
 }
 
 interface Shift {
@@ -100,7 +103,8 @@ export default function SharedReportPage() {
     const colorsMap = new Map<number, string>(carers.map((c: Carer) => [c.id, c.color || '#888']))
     setCarerColorsMap(colorsMap)
 
-    const carerTotals = new Map<number, { hours: number; cost: number; name: string }>()
+    const carerTotals = new Map<number, { hours: number; cost: number; name: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
+    let seq = 0
 
     shifts.forEach((shift: Shift) => {
       const carerId = shift.carer_id
@@ -111,22 +115,44 @@ export default function SharedReportPage() {
       const timeTo = new Date(shift.time_to)
       const hours = (timeTo.getTime() - timeFrom.getTime()) / (1000 * 60 * 60)
 
+      const shiftDate = new Date(shift.shift_date)
+      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+
       if (!carerTotals.has(carerId)) {
-        carerTotals.set(carerId, { hours: 0, cost: 0, name: `${carer.first_name} ${carer.last_name}` })
+        carerTotals.set(carerId, { hours: 0, cost: 0, name: `${carer.first_name} ${carer.last_name}`, monthlyData: new Map() })
       }
 
       const total = carerTotals.get(carerId)!
       total.hours += hours
       total.cost += shift.cost
+
+      if (!total.monthlyData.has(monthKey)) {
+        total.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const md = total.monthlyData.get(monthKey)!
+      md.hours += hours
+      md.cost += shift.cost
     })
 
-    const reports = Array.from(carerTotals.entries()).map(([carerId, total]) => ({
-      carerId,
-      carerName: total.name,
-      shiftHours: total.hours,
-      totalCost: total.cost,
-      color: colorsMap.get(carerId) || '#888'
-    }))
+    const reports = Array.from(carerTotals.entries()).map(([carerId, total]) => {
+      seq++
+      const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+      total.monthlyData.forEach((value, key) => {
+        monthlyDataObj[key] = {
+          hours: Math.round(value.hours * 100) / 100,
+          cost: Math.round(value.cost * 100) / 100
+        }
+      })
+      return {
+        seq,
+        carerId,
+        carerName: total.name,
+        shiftHours: Math.round(total.hours * 100) / 100,
+        totalCost: Math.round(total.cost * 100) / 100,
+        color: colorsMap.get(carerId) || '#888',
+        monthlyData: monthlyDataObj
+      }
+    })
 
     setCarerReports(reports)
   }
@@ -135,7 +161,7 @@ export default function SharedReportPage() {
     const { shifts, lineItems } = lineItemsReport
     const lineItemMap = new Map<string, LineItem>(lineItems.map((li: LineItem) => [li.id, li]))
 
-    const lineItemTotals = new Map<string, { seq: number; hours: number; cost: number; code: string; category: string; description: string }>()
+    const lineItemTotals = new Map<string, { seq: number; hours: number; cost: number; code: string; category: string; description: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
     let seq = 0
 
     shifts.forEach((shift: Shift) => {
@@ -158,24 +184,44 @@ export default function SharedReportPage() {
           cost: 0,
           code: lineItem?.code || codeId,
           category: lineItem?.category || 'Uncategorized',
-          description: lineItem?.description || ''
+          description: lineItem?.description || '',
+          monthlyData: new Map()
         })
       }
 
       const total = lineItemTotals.get(codeId)!
       total.hours += hours
       total.cost += shift.cost
+
+      const shiftDate = new Date(shift.shift_date)
+      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      if (!total.monthlyData.has(monthKey)) {
+        total.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const md = total.monthlyData.get(monthKey)!
+      md.hours += hours
+      md.cost += shift.cost
     })
 
     const reports = Array.from(lineItemTotals.entries())
-      .map(([, total]) => ({
-        seq: total.seq,
-        code: total.code,
-        category: total.category,
-        description: total.description,
-        hours: Math.round(total.hours * 100) / 100,
-        cost: Math.round(total.cost * 100) / 100
-      }))
+      .map(([, total]) => {
+        const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+        total.monthlyData.forEach((value, key) => {
+          monthlyDataObj[key] = {
+            hours: Math.round(value.hours * 100) / 100,
+            cost: Math.round(value.cost * 100) / 100
+          }
+        })
+        return {
+          seq: total.seq,
+          code: total.code,
+          category: total.category,
+          description: total.description,
+          hours: Math.round(total.hours * 100) / 100,
+          cost: Math.round(total.cost * 100) / 100,
+          monthlyData: monthlyDataObj
+        }
+      })
       .sort((a, b) => {
         const categoryCompare = a.category.localeCompare(b.category)
         if (categoryCompare !== 0) return categoryCompare
@@ -264,9 +310,24 @@ export default function SharedReportPage() {
     )
   }
 
+  const monthKeys = (() => {
+    if (!reportData?.dateFrom || !reportData?.dateTo) return [] as string[]
+    const start = new Date(reportData.dateFrom)
+    const end = new Date(reportData.dateTo)
+    start.setDate(1)
+    end.setDate(1)
+    const keys: string[] = []
+    const d = new Date(start)
+    while (d <= end) {
+      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      d.setMonth(d.getMonth() + 1)
+    }
+    return keys
+  })()
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)', color: 'var(--text)', padding: '40px 20px' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg)', color: 'var(--text)', padding: '40px 20px', overflow: 'auto' }}>
+      <div>
         <h1 style={{ marginBottom: '8px' }}>Shared Report</h1>
         <p style={{ color: '#999', marginBottom: '32px' }}>
           {reportData?.dateFrom} to {reportData?.dateTo}
@@ -275,7 +336,7 @@ export default function SharedReportPage() {
         {reportData?.carersReport && carerReports.length > 0 && (
           <section style={{ marginBottom: '48px' }}>
             <h2 style={{ marginBottom: '24px' }}>Carers Report</h2>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflow: 'auto' }}>
               <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',
@@ -286,14 +347,20 @@ export default function SharedReportPage() {
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600' }}>Carer</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600' }}>Total Cost</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', width: '40px' }}>Seq</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', minWidth: '180px' }}>Carer Name</th>
+                    {monthKeys.map(monthKey => (
+                      <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                        {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                      </th>
+                    ))}
+                    <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {carerReports.map((carer) => (
                     <tr key={carer.carerId} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px 6px', textAlign: 'center' }}>{carer.seq}</td>
                       <td style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
                           display: 'inline-block',
@@ -304,14 +371,23 @@ export default function SharedReportPage() {
                         }} />
                         {carer.carerName}
                       </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{carer.shiftHours.toFixed(2)}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>${carer.totalCost.toFixed(2)}</td>
+                      {monthKeys.map(monthKey => (
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                          {carer.monthlyData[monthKey] && carer.monthlyData[monthKey].cost > 0 ? `$${carer.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
+                        </td>
+                      ))}
+                      <td style={{ padding: '8px 6px', textAlign: 'right' }}>${carer.totalCost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td style={{ padding: '8px 12px' }}>TOTAL</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>{carerReports.reduce((sum, carer) => sum + carer.shiftHours, 0).toFixed(2)}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>${carerReports.reduce((sum, carer) => sum + carer.totalCost, 0).toFixed(2)}</td>
+                    <td colSpan={2} style={{ padding: '8px 12px' }}>TOTAL</td>
+                    {monthKeys.map(monthKey => {
+                      const monthTotal = carerReports.reduce((sum, c) => sum + (c.monthlyData[monthKey]?.cost || 0), 0)
+                      return (
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>${monthTotal.toFixed(2)}</td>
+                      )
+                    })}
+                    <td style={{ padding: '8px 6px', textAlign: 'right' }}>${carerReports.reduce((sum, c) => sum + c.totalCost, 0).toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -320,14 +396,14 @@ export default function SharedReportPage() {
             {carerReports.length > 0 && (
               <div style={{ marginTop: '40px', display: 'flex', gap: '60px', alignItems: 'flex-start' }}>
                 <div>
-                  <h3 style={{ marginBottom: '20px' }}>Carer Cost Distribution</h3>
-                  <svg viewBox="0 0 200 200" style={{ width: '400px', height: '400px' }}>
+                  <h3 style={{ marginBottom: '12px' }}>Carer Cost Distribution</h3>
+                  <svg viewBox="0 0 200 200" style={{ width: '600px', height: '600px' }}>
                     {(() => {
                       const total = carerReports.reduce((sum, carer) => sum + carer.totalCost, 0)
                       let currentAngle = -90
                       
                       return carerReports.map((carer, idx) => {
-                        const sliceAngle = (carer.totalCost / total) * 360
+                        const sliceAngle = total > 0 ? (carer.totalCost / total) * 360 : 0
                         const startAngle = currentAngle
                         const endAngle = currentAngle + sliceAngle
                         
@@ -347,31 +423,73 @@ export default function SharedReportPage() {
                           `Z`
                         ].join(' ')
                         
+                        const midAngle = startAngle + sliceAngle / 2
+                        const mr = 55
+                        const mx = 100 + mr * Math.cos((midAngle * Math.PI) / 180)
+                        const my = 100 + mr * Math.sin((midAngle * Math.PI) / 180)
+                        const initials = carer.carerName.split(' ').map((s: string) => s[0]).join('').toUpperCase()
+                        
                         currentAngle = endAngle
                         
-                        return <path key={idx} d={pathData} fill={carer.color} />
+                        return (
+                          <g key={idx}>
+                            <path d={pathData} fill={carer.color} />
+                            {sliceAngle > 10 && (
+                              <text x={mx} y={my} fill="#fff" fontSize="12" textAnchor="middle" dominantBaseline="middle">{initials}</text>
+                            )}
+                          </g>
+                        )
                       })
                     })()}
                   </svg>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'flex-start', paddingTop: '60px' }}>
-                  {carerReports.map((carer, idx) => {
-                    const total = carerReports.reduce((sum, c) => sum + c.totalCost, 0)
-                    const percentage = ((carer.totalCost / total) * 100).toFixed(1)
-                    return (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
-                        <span style={{
-                          display: 'inline-block',
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '50%',
-                          backgroundColor: carer.color,
-                          flexShrink: 0
-                        }} />
-                        <span>{carer.carerName}: {percentage}%</span>
-                      </div>
-                    )
-                  })}
+                <div>
+                  <h3 style={{ marginBottom: '12px' }}>Carer Time Distribution</h3>
+                  <svg viewBox="0 0 200 200" style={{ width: '600px', height: '600px' }}>
+                    {(() => {
+                      const total = carerReports.reduce((sum, carer) => sum + carer.shiftHours, 0)
+                      let currentAngle = -90
+                      
+                      return carerReports.map((carer, idx) => {
+                        const sliceAngle = total > 0 ? (carer.shiftHours / total) * 360 : 0
+                        const startAngle = currentAngle
+                        const endAngle = currentAngle + sliceAngle
+                        
+                        const startRad = (startAngle * Math.PI) / 180
+                        const endRad = (endAngle * Math.PI) / 180
+                        
+                        const x1 = 100 + 80 * Math.cos(startRad)
+                        const y1 = 100 + 80 * Math.sin(startRad)
+                        const x2 = 100 + 80 * Math.cos(endRad)
+                        const y2 = 100 + 80 * Math.sin(endRad)
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0
+                        const pathData = [
+                          `M 100 100`,
+                          `L ${x1} ${y1}`,
+                          `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
+                          `Z`
+                        ].join(' ')
+                        
+                        const midAngle = startAngle + sliceAngle / 2
+                        const mr = 55
+                        const mx = 100 + mr * Math.cos((midAngle * Math.PI) / 180)
+                        const my = 100 + mr * Math.sin((midAngle * Math.PI) / 180)
+                        const initials = carer.carerName.split(' ').map((s: string) => s[0]).join('').toUpperCase()
+                        
+                        currentAngle = endAngle
+                        
+                        return (
+                          <g key={idx}>
+                            <path d={pathData} fill={carer.color} />
+                            {sliceAngle > 10 && (
+                              <text x={mx} y={my} fill="#fff" fontSize="12" textAnchor="middle" dominantBaseline="middle">{initials}</text>
+                            )}
+                          </g>
+                        )
+                      })
+                    })()}
+                  </svg>
                 </div>
               </div>
             )}
@@ -381,7 +499,7 @@ export default function SharedReportPage() {
         {reportData?.lineItemsReport && lineItemReports.length > 0 && (
           <section style={{ marginBottom: '48px' }}>
             <h2 style={{ marginBottom: '24px' }}>Line Item Codes Report</h2>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflow: 'auto' }}>
               <table style={{
                 width: '100%',
                 borderCollapse: 'collapse',
@@ -392,29 +510,44 @@ export default function SharedReportPage() {
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '50px' }}>Seq</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', width: '100px' }}>Code</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Category</th>
-                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Cost</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', width: '40px' }}>Seq</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '100px' }}>Code</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '160px' }}>Category</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '200px' }}>Description</th>
+                    {monthKeys.map(monthKey => (
+                      <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                        {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                      </th>
+                    ))}
+                    <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItemReports.map((item, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px', textAlign: 'center' }}>{item.seq}</td>
-                      <td style={{ padding: '12px' }}>{item.code}</td>
-                      <td style={{ padding: '12px' }}>{item.category}</td>
-                      <td style={{ padding: '12px' }}>{item.description}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{item.hours.toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>${item.cost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'center' }}>{item.seq}</td>
+                      <td style={{ padding: '8px 6px' }}>{item.code}</td>
+                      <td style={{ padding: '8px 6px' }}>{item.category}</td>
+                      <td style={{ padding: '8px 6px' }}>{item.description}</td>
+                      {monthKeys.map(monthKey => (
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                          {item.monthlyData[monthKey] && item.monthlyData[monthKey].cost > 0 ? `$${item.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
+                        </td>
+                      ))}
+                      <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600' }}>${item.cost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td colSpan={4} style={{ padding: '12px' }}>TOTAL</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>{lineItemReports.reduce((sum, item) => sum + item.hours, 0).toFixed(2)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
+                    <td colSpan={4} style={{ padding: '8px 6px' }}>TOTAL</td>
+                    {monthKeys.map(monthKey => {
+                      const monthTotal = lineItemReports.reduce((sum, item) => sum + (item.monthlyData[monthKey]?.cost || 0), 0)
+                      return (
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                          ${monthTotal.toFixed(2)}
+                        </td>
+                      )
+                    })}
+                    <td style={{ padding: '8px 6px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -438,7 +571,7 @@ export default function SharedReportPage() {
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', width: '40px' }}>Seq</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', minWidth: '200px' }}>Category</th>
-                    {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
+                    {monthKeys.map(monthKey => (
                       <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
                         {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
                       </th>
@@ -451,7 +584,7 @@ export default function SharedReportPage() {
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '8px 6px', textAlign: 'center' }}>{idx + 1}</td>
                       <td style={{ padding: '8px 12px' }}>{cat.category}</td>
-                      {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
+                      {monthKeys.map(monthKey => (
                         <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
                           {cat.monthlyData[monthKey] && cat.monthlyData[monthKey].cost > 0 ? `$${cat.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
                         </td>
@@ -461,7 +594,7 @@ export default function SharedReportPage() {
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
                     <td colSpan={2} style={{ padding: '8px 12px' }}>TOTAL</td>
-                    {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => {
+                    {monthKeys.map(monthKey => {
                       const monthTotal = categoryReports.reduce((sum, cat) => sum + (cat.monthlyData[monthKey]?.cost || 0), 0)
                       return (
                         <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
@@ -479,7 +612,7 @@ export default function SharedReportPage() {
               <div style={{ marginTop: '40px', display: 'flex', gap: '60px', alignItems: 'flex-start' }}>
                 <div>
                   <h3 style={{ marginBottom: '20px' }}>Category Budget Distribution</h3>
-                  <svg viewBox="0 0 200 200" style={{ width: '400px', height: '400px' }}>
+                  <svg viewBox="0 0 200 200" style={{ width: '600px', height: '600px' }}>
                     {(() => {
                       const total = categoryReports.reduce((sum, cat) => sum + cat.cost, 0)
                       let currentAngle = -90
@@ -506,9 +639,22 @@ export default function SharedReportPage() {
                           `Z`
                         ].join(' ')
                         
+                        const midAngle = startAngle + sliceAngle / 2
+                        const mr = 55
+                        const mx = 100 + mr * Math.cos((midAngle * Math.PI) / 180)
+                        const my = 100 + mr * Math.sin((midAngle * Math.PI) / 180)
+                        const abbr = cat.category.split(' ').map((w: string) => w[0]).join('').slice(0,4).toUpperCase()
+
                         currentAngle = endAngle
                         
-                        return <path key={idx} d={pathData} fill={colors[idx % colors.length]} />
+                        return (
+                          <g key={idx}>
+                            <path d={pathData} fill={colors[idx % colors.length]} />
+                            {sliceAngle > 10 && (
+                              <text x={mx} y={my} fill="#fff" fontSize="12" textAnchor="middle" dominantBaseline="middle">{abbr}</text>
+                            )}
+                          </g>
+                        )
                       })
                     })()}
                   </svg>
