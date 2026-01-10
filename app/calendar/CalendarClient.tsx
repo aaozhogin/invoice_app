@@ -1027,6 +1027,12 @@ export default function CalendarClient() {
   const refreshInvoiceCarerCounts = async () => {
     try {
       const supabase = getSupabaseClient()
+      if (!user) {
+        setCopyShiftIsWorking(false)
+        setCopyShiftError('You must be signed in to copy shifts.')
+        return
+      }
+      const userId = user.id
       const dayYmd = toYmdLocal(currentDate)
       const rangeFrom = dateFrom || dayYmd
       const rangeTo = dateTo || dayYmd
@@ -1593,13 +1599,13 @@ export default function CalendarClient() {
             .from('shifts')
             .select('*')
             .eq('shift_date', targetYmd)
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .eq('client_id', selectedClientId),
           supabase
             .from('shifts')
             .select('*')
             .eq('shift_date', prevTargetYmd)
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .eq('client_id', selectedClientId)
         ])
         
