@@ -761,6 +761,17 @@ export default function ShiftsClient() {
                 <td colSpan={13} className="no-data">No shifts found</td>
               </tr>
             )}
+            {getFilteredAndSortedShifts().length > 0 && (
+              <tr className="total-row">
+                <td colSpan={9} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                  TOTAL:
+                </td>
+                <td style={{ fontWeight: 'bold', fontSize: '1.1em' }}>
+                  ${getFilteredAndSortedShifts().reduce((sum, shift) => sum + shift.cost, 0).toFixed(2)}
+                </td>
+                <td colSpan={3}></td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -936,13 +947,18 @@ export default function ShiftsClient() {
         }
 
         .total-row {
-          border-top: 2px solid #cbd5e1;
-          background-color: #eef2f8;
+          border-top: 2px solid var(--border);
+          background-color: var(--card);
+          font-weight: 700;
+        }
+
+        .total-row td {
+          color: var(--text) !important;
           font-weight: 700;
         }
 
         .total-row td:first-child {
-          border-right: 1px solid #cbd5e1 !important;
+          border-right: none !important;
         }
 
         .text-muted {
