@@ -4900,24 +4900,26 @@ export default function CalendarClient() {
                       ))}
                       <div className="cal-breakdown-total">
                         <strong>Shift total: ${(manualCostOverride ?? breakdown.total).toFixed(2)}{manualCostOverride && <span style={{ marginLeft: '8px', fontSize: '0.9em' }}>⚙️</span>}</strong>
-                        <button
-                          type="button"
-                          onClick={() => setShowManualCostInput(!showManualCostInput)}
-                          style={{
-                            marginLeft: '12px',
-                            padding: '4px 8px',
-                            fontSize: '12px',
-                            backgroundColor: 'transparent',
-                            border: '1px solid #64748b',
-                            color: '#000000',
-                            cursor: 'pointer',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          {manualCostOverride ? '✎ Edit' : '✎ Override'}
-                        </button>
+                        {newShift.category !== 'HIREUP' && (
+                          <button
+                            type="button"
+                            onClick={() => setShowManualCostInput(!showManualCostInput)}
+                            style={{
+                              marginLeft: '12px',
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              backgroundColor: 'transparent',
+                              border: '1px solid #64748b',
+                              color: '#000000',
+                              cursor: 'pointer',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {manualCostOverride ? '✎ Edit' : '✎ Override'}
+                          </button>
+                        )}
                       </div>
-                      {showManualCostInput && (
+                      {showManualCostInput && newShift.category !== 'HIREUP' && (
                         <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'flex-end' }}>
                           <label style={{ fontSize: '14px', color: '#000000', fontWeight: '500' }}>Override cost:</label>
                           <input

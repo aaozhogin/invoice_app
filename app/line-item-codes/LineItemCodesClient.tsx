@@ -221,7 +221,7 @@ export default function LineItemCodesClient() {
     return () => {
       mounted = false;
     };
-  }, [supabase]);
+  }, [supabase, user?.id]);
 
   // Fetch categories
   useEffect(() => {
@@ -243,7 +243,7 @@ export default function LineItemCodesClient() {
     return () => {
       mounted = false;
     };
-  }, [supabase]);
+  }, [supabase, user?.id]);
 
   // For sleepover, public holiday, or weekend line items, times are not applicable
   useEffect(() => {
