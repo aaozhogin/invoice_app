@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
+    console.log('Successfully created shared report with token:', shareToken)
+
     // Generate the shareable URL
     const baseUrl = req.headers.get('origin') || 'http://localhost:3000'
     const shareUrl = `${baseUrl}/shared-report/${shareToken}`

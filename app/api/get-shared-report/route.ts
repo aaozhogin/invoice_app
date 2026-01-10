@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing share token' }, { status: 400 })
     }
 
+    console.log('Looking for share token:', shareToken)
+
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
     // Get the shared report by token (public access, no auth required)
@@ -27,7 +29,10 @@ export async function GET(req: NextRequest) {
       .eq('share_token', shareToken)
       .single() as any
 
+    console.log('Shared report query result:', { data: sharedReport, error: reportError })
+
     if (reportError || !sharedReport) {
+      console.error('Report not found:', reportError)
       return NextResponse.json({ error: 'Invalid or expired share link' }, { status: 404 })
     }
 
