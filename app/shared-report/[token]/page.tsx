@@ -19,7 +19,6 @@ interface LineItemReport {
   description: string
   hours: number
   cost: number
-  monthlyData: { [key: string]: { hours: number; cost: number } }
 }
 
 interface Shift {
@@ -134,23 +133,16 @@ export default function SharedReportPage() {
 
   const processLineItemsReport = (lineItemsReport: any, dateFrom: string, dateTo: string, hireupCode: string) => {
     const { shifts, lineItems } = lineItemsReport
-    
-    // Build a map of line items by ID
     const lineItemMap = new Map<string, LineItem>(lineItems.map((li: LineItem) => [li.id, li]))
 
-    // Group shifts by line item code ID
-    const lineItemTotals = new Map<string, { seq: number; hours: number; cost: number; code: string; category: string; description: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
+    const lineItemTotals = new Map<string, { seq: number; hours: number; cost: number; code: string; category: string; description: string }>()
     let seq = 0
 
     shifts.forEach((shift: Shift) => {
-      // Get the line item code ID from the shift
       let codeId = shift.line_item_code_id ? String(shift.line_item_code_id) : null
-      
-      // Map HIREUP to selected code
       if (shift.category === 'HIREUP' && hireupCode) {
         codeId = hireupCode
       }
-      
       if (!codeId) return
 
       const timeFrom = new Date(shift.time_from)
@@ -166,46 +158,24 @@ export default function SharedReportPage() {
           cost: 0,
           code: lineItem?.code || codeId,
           category: lineItem?.category || 'Uncategorized',
-          description: lineItem?.description || '',
-          monthlyData: new Map()
+          description: lineItem?.description || ''
         })
       }
 
       const total = lineItemTotals.get(codeId)!
       total.hours += hours
       total.cost += shift.cost
-
-      // Add to monthly data
-      const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
-      
-      if (!total.monthlyData.has(monthKey)) {
-        total.monthlyData.set(monthKey, { hours: 0, cost: 0 })
-      }
-      const monthData = total.monthlyData.get(monthKey)!
-      monthData.hours += hours
-      monthData.cost += shift.cost
     })
 
     const reports = Array.from(lineItemTotals.entries())
-      .map(([, total]) => {
-        const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
-        total.monthlyData.forEach((value, key) => {
-          monthlyDataObj[key] = {
-            hours: Math.round(value.hours * 100) / 100,
-            cost: Math.round(value.cost * 100) / 100
-          }
-        })
-        return {
-          seq: total.seq,
-          code: total.code,
-          category: total.category,
-          description: total.description,
-          hours: Math.round(total.hours * 100) / 100,
-          cost: Math.round(total.cost * 100) / 100,
-          monthlyData: monthlyDataObj
-        }
-      })
+      .map(([, total]) => ({
+        seq: total.seq,
+        code: total.code,
+        category: total.category,
+        description: total.description,
+        hours: Math.round(total.hours * 100) / 100,
+        cost: Math.round(total.cost * 100) / 100
+      }))
       .sort((a, b) => {
         const categoryCompare = a.category.localeCompare(b.category)
         if (categoryCompare !== 0) return categoryCompare
@@ -422,44 +392,29 @@ export default function SharedReportPage() {
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: '600', width: '40px' }}>Seq</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '80px' }}>Code</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '150px' }}>Category</th>
-                    <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: '600', minWidth: '150px' }}>Description</th>
-                    {Object.keys(lineItemReports[0]?.monthlyData || {}).sort().map(monthKey => (
-                      <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
-                        {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
-                      </th>
-                    ))}
-                    <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>Total</th>
+                    <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '50px' }}>Seq</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', width: '100px' }}>Code</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Category</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
+                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Cost</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItemReports.map((item, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 6px', textAlign: 'center' }}>{item.seq}</td>
-                      <td style={{ padding: '8px 6px' }}>{item.code}</td>
-                      <td style={{ padding: '8px 6px' }}>{item.category}</td>
-                      <td style={{ padding: '8px 6px' }}>{item.description}</td>
-                      {Object.keys(lineItemReports[0]?.monthlyData || {}).sort().map(monthKey => (
-                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
-                          {item.monthlyData[monthKey] && item.monthlyData[monthKey].cost > 0 ? `$${item.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
-                        </td>
-                      ))}
-                      <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600' }}>${item.cost.toFixed(2)}</td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>{item.seq}</td>
+                      <td style={{ padding: '12px' }}>{item.code}</td>
+                      <td style={{ padding: '12px' }}>{item.category}</td>
+                      <td style={{ padding: '12px' }}>{item.description}</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>{item.hours.toFixed(2)}</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>${item.cost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td colSpan={4} style={{ padding: '8px 6px' }}>TOTAL</td>
-                    {Object.keys(lineItemReports[0]?.monthlyData || {}).sort().map(monthKey => {
-                      const monthTotal = lineItemReports.reduce((sum, item) => sum + (item.monthlyData[monthKey]?.cost || 0), 0)
-                      return (
-                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
-                          ${monthTotal.toFixed(2)}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '8px 6px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
+                    <td colSpan={4} style={{ padding: '12px' }}>TOTAL</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>{lineItemReports.reduce((sum, item) => sum + item.hours, 0).toFixed(2)}</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
