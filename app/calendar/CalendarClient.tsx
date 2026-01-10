@@ -1589,8 +1589,18 @@ export default function CalendarClient() {
         const prevTargetYmd = toYmdLocal(prevTargetDay)
         
         const [currentDayShiftsRes, prevDayShiftsRes] = await Promise.all([
-          supabase.from('shifts').select('*').eq('shift_date', targetYmd),
-          supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd)
+          supabase
+            .from('shifts')
+            .select('*')
+            .eq('shift_date', targetYmd)
+            .eq('user_id', user.id)
+            .eq('client_id', selectedClientId),
+          supabase
+            .from('shifts')
+            .select('*')
+            .eq('shift_date', prevTargetYmd)
+            .eq('user_id', user.id)
+            .eq('client_id', selectedClientId)
         ])
         
         // For previous day shifts, only include those that extend into the target day (end time > target day start)
