@@ -4190,45 +4190,46 @@ export default function CalendarClient() {
                     <span>
                       {dayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                     </span>
-                    <button
-                      onClick={() => setDeleteAllShiftsDateConfirm(dayYmd)}
-                      style={{
-                        padding: '2px 6px',
-                        fontSize: '0.75em',
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        opacity: 0.35,
-                        transition: 'opacity 0.2s',
-                        marginRight: '4px'
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.35')}
-                      title="Delete all shifts for this day"
-                    >
-                      Delete all
-                    </button>
-                    <button
-                      onClick={() => { setCurrentDate(dayDate); handleCopyDayClick() }}
-                      style={{
-                        padding: '2px 6px',
-                        fontSize: '0.75em',
-                        backgroundColor: '#6366f1',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        opacity: 0.35,
-                        transition: 'opacity 0.2s'
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.35')}
-                      title="Copy day"
-                    >
-                      Copy day
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        onClick={() => { setCurrentDate(dayDate); handleCopyDayClick() }}
+                        style={{
+                          padding: '2px 6px',
+                          fontSize: '0.75em',
+                          backgroundColor: '#6366f1',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          opacity: 0.35,
+                          transition: 'opacity 0.2s'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.35')}
+                        title="Copy day"
+                      >
+                        Copy day
+                      </button>
+                      <button
+                        onClick={() => setDeleteAllShiftsDateConfirm(dayYmd)}
+                        style={{
+                          padding: '2px 6px',
+                          fontSize: '0.75em',
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          opacity: 0.35,
+                          transition: 'opacity 0.2s'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.35')}
+                        title="Delete all shifts for this day"
+                      >
+                        Delete all
+                      </button>
+                    </div>
                   </div>
                   
                   <div 
