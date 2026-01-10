@@ -1733,7 +1733,8 @@ export default function CalendarClient() {
           client_id: sourceShift.client_id,
           line_item_code_id: lineItemCodeId,
           category: category,
-          cost
+          cost,
+          user_id: user?.id
         }
 
         inserts.push(newInsert)
@@ -1949,7 +1950,8 @@ export default function CalendarClient() {
             client_id: s.client_id,
             line_item_code_id: lineItemCodeId,
             category: category,
-            cost
+            cost,
+            user_id: user?.id
           }
 
           console.log(`📝 Adding to inserts array for ${targetYmd}: ${startTime}-${endTime}`)
@@ -2217,7 +2219,8 @@ export default function CalendarClient() {
               client_id: s.client_id,
               line_item_code_id: lineItemCodeId,
               category: category,
-              cost
+              cost,
+              user_id: user?.id
             })
           }
         }
