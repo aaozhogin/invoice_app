@@ -262,6 +262,53 @@ export type Database = {
           created_at?: string;
         };
       };
+      shared_reports: {
+        Row: {
+          id: string;
+          user_id: string;
+          share_token: string;
+          carers_report: boolean;
+          line_items_report: boolean;
+          categories_report: boolean;
+          date_from: string;
+          date_to: string;
+          created_at: string;
+          expires_at: string | null;
+          access_count: number;
+          last_accessed_at: string | null;
+          is_active: boolean;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          share_token: string;
+          carers_report?: boolean;
+          line_items_report?: boolean;
+          categories_report?: boolean;
+          date_from: string;
+          date_to: string;
+          created_at?: string;
+          expires_at?: string | null;
+          access_count?: number;
+          last_accessed_at?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          share_token?: string;
+          carers_report?: boolean;
+          line_items_report?: boolean;
+          categories_report?: boolean;
+          date_from?: string;
+          date_to?: string;
+          created_at?: string;
+          expires_at?: string | null;
+          access_count?: number;
+          last_accessed_at?: string | null;
+          is_active?: boolean;
+        };
+      };
     };
     Functions: Record<string, never>;
     Views: Record<string, never>;

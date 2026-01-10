@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { getSupabaseClient } from '@/app/lib/supabaseClient'
 import { useAuth } from '@/app/lib/AuthContext'
+import ShareModal from '@/components/ShareModal'
 
 interface CarerReport {
   carerId: number
@@ -62,6 +63,7 @@ export default function ReportsClient() {
   const [categoryReports, setCategoryReports] = useState<CategoryReport[]>([])
   const [loading, setLoading] = useState(true)
   const [carerColorsMap, setCarerColorsMap] = useState<Map<number, string>>(new Map())
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
   // Load dates from localStorage on mount
   useEffect(() => {
@@ -337,6 +339,53 @@ export default function ReportsClient() {
     return (to.getTime() - from.getTime()) / (1000 * 60 * 60)
   }
 
+  const handleGenerateShareLink = async (reports: {
+    carersReport: boolean
+    lineItemsReport: boolean
+    categoriesReport: boolean
+  }) => {
+    if (!user) {
+      alert('You must be logged in to share reports')
+      return null
+    }
+
+    try {
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      }
+
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+
+      const res = await fetch('/api/share-report', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          carersReport: reports.carersReport,
+          lineItemsReport: reports.lineItemsReport,
+          categoriesReport: reports.categoriesReport,
+          dateFrom,
+          dateTo
+        })
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to generate share link')
+      }
+
+      const json = await res.json()
+      return { shareUrl: json.shareUrl }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to generate share link'
+      throw new Error(message)
+    }
+  }
+
   const categories = Array.from(new Set(lineItemCodes.map(l => l.category).filter(Boolean))) as string[]
   const filteredCodes = selectedCategory
     ? lineItemCodes.filter(l => l.category === selectedCategory)
@@ -387,6 +436,22 @@ export default function ReportsClient() {
           className="reports-btn-clear"
         >
           Clear Dates
+        </button>
+        <button
+          onClick={() => setIsShareModalOpen(true)}
+          className="reports-btn-share"
+          style={{
+            padding: '8px 16px',
+            backgroundColor: 'var(--accent)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '14px'
+          }}
+        >
+          Share Report
         </button>
       </div>
 
@@ -1277,6 +1342,14 @@ export default function ReportsClient() {
           }
         }
       `}</style>
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onClose={() => setIsShareModalOpen(false)}
+        onGenerate={handleGenerateShareLink}
+      />
     </div>
   )
 }
