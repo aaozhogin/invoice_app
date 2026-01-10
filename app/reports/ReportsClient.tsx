@@ -698,9 +698,9 @@ export default function ReportsClient() {
 
             {/* Category Budget Distribution Chart */}
             <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Category Budget Distribution</h3>
-            <div className="reports-table-wrapper" style={{ maxWidth: '500px' }}>
+            <div className="reports-table-wrapper" style={{ maxWidth: '600px' }}>
               {categoryReports.length > 0 ? (
-                <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '450px', height: '450px' }}>
                   {(() => {
                     let currentAngle = -90
                     const totalCost = categoryTotalCost || 1
@@ -717,27 +717,94 @@ export default function ReportsClient() {
                       const startRad = (startAngle * Math.PI) / 180
                       const endRad = (endAngle * Math.PI) / 180
 
-                      const x1 = 100 + 80 * Math.cos(startRad)
-                      const y1 = 100 + 80 * Math.sin(startRad)
-                      const x2 = 100 + 80 * Math.cos(endRad)
-                      const y2 = 100 + 80 * Math.sin(endRad)
+                      const x1 = 225 + 180 * Math.cos(startRad)
+                      const y1 = 225 + 180 * Math.sin(startRad)
+                      const x2 = 225 + 180 * Math.cos(endRad)
+                      const y2 = 225 + 180 * Math.sin(endRad)
 
                       const largeArc = sliceAngle > 180 ? 1 : 0
 
-                      const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+                      const path = `M 225 225 L ${x1} ${y1} A 180 180 0 ${largeArc} 1 ${x2} ${y2} Z`
 
+                      // Calculate mid-angle for label placement
+                      const midAngle = (startAngle + endAngle) / 2
+                      const midRad = (midAngle * Math.PI) / 180
+                      
+                      // Get category abbreviation (first 2 letters)
+                      const abbrev = cat.category.substring(0, 2).toUpperCase()
+                      
+                      // Small slice threshold (less than 5%)
+                      const isSmallSlice = sliceAngle < 18 // 5% of 360 degrees
+                      
                       currentAngle = endAngle
 
-                      return (
-                        <g key={idx}>
-                          <path
-                            d={path}
-                            fill={colors[idx % colors.length]}
-                            stroke="var(--card)"
-                            strokeWidth="1"
-                          />
-                        </g>
-                      )
+                      if (isSmallSlice) {
+                        // External label with leader line
+                        const labelRadius = 220
+                        const lineStartRadius = 190
+                        const labelX = 225 + labelRadius * Math.cos(midRad)
+                        const labelY = 225 + labelRadius * Math.sin(midRad)
+                        const lineStartX = 225 + lineStartRadius * Math.cos(midRad)
+                        const lineStartY = 225 + lineStartRadius * Math.sin(midRad)
+                        
+                        return (
+                          <g key={idx}>
+                            <path
+                              d={path}
+                              fill={colors[idx % colors.length]}
+                              stroke="var(--card)"
+                              strokeWidth="3"
+                            />
+                            <line
+                              x1={lineStartX}
+                              y1={lineStartY}
+                              x2={labelX}
+                              y2={labelY}
+                              stroke={colors[idx % colors.length]}
+                              strokeWidth="2"
+                            />
+                            <text
+                              x={labelX}
+                              y={labelY}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize="18"
+                              fontWeight="bold"
+                              fill="white"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {abbrev}
+                            </text>
+                          </g>
+                        )
+                      } else {
+                        // Internal label
+                        const textX = 225 + 127.5 * Math.cos(midRad)
+                        const textY = 225 + 127.5 * Math.sin(midRad)
+                        
+                        return (
+                          <g key={idx}>
+                            <path
+                              d={path}
+                              fill={colors[idx % colors.length]}
+                              stroke="var(--card)"
+                              strokeWidth="3"
+                            />
+                            <text
+                              x={textX}
+                              y={textY}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize="21"
+                              fontWeight="bold"
+                              fill="white"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {abbrev}
+                            </text>
+                          </g>
+                        )
+                      }
                     })
                   })()}
                 </svg>

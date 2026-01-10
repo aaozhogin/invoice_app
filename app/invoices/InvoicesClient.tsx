@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useAuth } from '@/app/lib/AuthContext'
 
 interface InvoiceRecord {
   id: string
@@ -19,6 +20,7 @@ interface InvoiceRecord {
 }
 
 export default function InvoicesClient() {
+  const { user, loading: authLoading } = useAuth()
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,8 +28,14 @@ export default function InvoicesClient() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      setInvoices([])
+      setIsLoading(false)
+      return
+    }
     fetchInvoices()
-  }, [])
+  }, [user, authLoading])
 
   useEffect(() => {
     // Listen for invoice generation events from the calendar
