@@ -3613,7 +3613,24 @@ export default function CalendarClient() {
           </button>
         </div>
         <div className="cal-button-group">
-          <button onClick={() => setCurrentDate(new Date())}>
+          <button 
+            onClick={() => setCurrentDate(new Date())}
+            disabled={(() => {
+              if (!dateFrom || !dateTo) return false
+              const today = toYmdLocal(new Date())
+              const from = dateFrom
+              const to = dateTo
+              return today < from || today > to
+            })()}
+            style={(() => {
+              if (!dateFrom || !dateTo) return {}
+              const today = toYmdLocal(new Date())
+              const from = dateFrom
+              const to = dateTo
+              const isOutOfRange = today < from || today > to
+              return isOutOfRange ? { opacity: 0.4, cursor: 'not-allowed' } : {}
+            })()}
+          >
             {viewMode === 'day' ? 'Today' : 'Current Week'}
           </button>
           <button 
