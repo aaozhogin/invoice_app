@@ -4793,7 +4793,7 @@ export default function CalendarClient() {
                         </div>
                       ))}
                       <div className="cal-breakdown-total">
-                        <strong>Shift total: ${(manualCostOverride ?? breakdown.total).toFixed(2)}</strong>
+                        <strong>Shift total: ${(manualCostOverride ?? breakdown.total).toFixed(2)}{manualCostOverride && <span style={{ marginLeft: '8px', fontSize: '0.9em' }}>⚙️</span>}</strong>
                         <button
                           type="button"
                           onClick={() => setShowManualCostInput(!showManualCostInput)}
@@ -4802,8 +4802,8 @@ export default function CalendarClient() {
                             padding: '4px 8px',
                             fontSize: '12px',
                             backgroundColor: 'transparent',
-                            border: '1px solid #cbd5e1',
-                            color: '#cbd5e1',
+                            border: '1px solid #64748b',
+                            color: '#f1f5f9',
                             cursor: 'pointer',
                             borderRadius: '4px'
                           }}
@@ -4813,7 +4813,7 @@ export default function CalendarClient() {
                       </div>
                       {showManualCostInput && (
                         <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Override cost:</label>
+                          <label style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: '500' }}>Override cost:</label>
                           <input
                             type="number"
                             min="0"
