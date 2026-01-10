@@ -1709,8 +1709,8 @@ export default function CalendarClient() {
           cost = Number(sourceShift.cost || 0)
           lineItemCodeId = null
         } else {
-          const isSleepover = !!sourceShift.line_items?.sleepover
-          const isPublicHoliday = !!sourceShift.line_items?.public_holiday
+          const isSleepover = Boolean((sourceShift as any).is_sleepover)
+          const isPublicHoliday = Boolean((sourceShift as any).is_public_holiday)
           const dayType = getDayTypeFromYmd(targetYmd)
           
           const targetLineItem = pickLineItemForShift({
@@ -1744,6 +1744,8 @@ export default function CalendarClient() {
           line_item_code_id: lineItemCodeId,
           category: category,
           cost,
+          is_sleepover: Boolean((sourceShift as any).is_sleepover),
+          is_public_holiday: Boolean((sourceShift as any).is_public_holiday),
           user_id: user?.id
         }
 
@@ -1851,7 +1853,7 @@ export default function CalendarClient() {
         for (const s of sourceShifts) {
           const lineItemId = String((s as any).line_item_code_id ?? '')
           const li = lineItemCodes.find(x => x.id === lineItemId)
-
+        
           // Get category from shift record first (for HIREUP), then from line_items join, then from lineItemCodes
           const category = (s as any).category || (s as any).line_items?.category || li?.category
           if (!category) continue
@@ -2196,8 +2198,8 @@ export default function CalendarClient() {
               cost = Number(s.cost || 0)
               lineItemCodeId = null
             } else {
-              const isSleepover = !!li?.sleepover
-              const isPublicHoliday = !!li?.public_holiday
+              const isSleepover = Boolean((s as any).is_sleepover)
+              const isPublicHoliday = Boolean((s as any).is_public_holiday)
               const dayType = getDayTypeFromYmd(targetYmd)
               const targetLineItem = pickLineItemForShift({
                 category,
@@ -2230,6 +2232,8 @@ export default function CalendarClient() {
               line_item_code_id: lineItemCodeId,
               category: category,
               cost,
+              is_sleepover: Boolean((s as any).is_sleepover),
+              is_public_holiday: Boolean((s as any).is_public_holiday),
               user_id: user?.id
             })
           }
