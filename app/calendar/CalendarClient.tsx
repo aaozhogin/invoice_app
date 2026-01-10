@@ -4848,6 +4848,26 @@ export default function CalendarClient() {
                           >
                             Done
                           </button>
+                          {manualCostOverride && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setManualCostOverride(null)
+                                setShowManualCostInput(false)
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                backgroundColor: '#ef4444',
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                borderRadius: '4px'
+                              }}
+                            >
+                              Undo override
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
