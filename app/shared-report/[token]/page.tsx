@@ -193,21 +193,21 @@ export default function SharedReportPage() {
   }
 
   const processCategoriesReport = (categoriesReport: any, dateFrom: string, dateTo: string, hireupCode: string) => {
-    const { shifts } = categoriesReport
+    const { shifts, lineItems = [] } = categoriesReport
+    const lineItemMap = new Map<string, LineItem>(lineItems.map((li: LineItem) => [li.id, li]))
     const categoryTotals = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shifts.forEach((shift: Shift) => {
       let categoryName = shift.category || 'Uncategorized'
       
-      // If this is a HIREUP shift and we have a mapping, use the mapped line item's category
-      if (shift.category === 'HIREUP' && hireupCode && shift.line_item_code_id) {
-        // The category should come from the line item, not from the shift
-        // Since we don't have lineItems in categoriesReport, we keep it as HIREUP
-        // This matches the actual report behavior
-        categoryName = 'HIREUP'
-      } else if (shift.line_item_code_id) {
-        // For non-HIREUP shifts, we should use the shift's category as is
-        categoryName = shift.category || 'Uncategorized'
+      // If this is a HIREUP shift and we have a mapping
+      if (shift.category === 'HIREUP' && hireupCode) {
+        // Find the line item that the HIREUP was mapped to
+        const mappedLineItem = lineItemMap.get(hireupCode)
+        if (mappedLineItem && mappedLineItem.category) {
+          // Use the mapped line item's category
+          categoryName = mappedLineItem.category
+        }
       }
       
       const shiftDate = new Date(shift.shift_date)
@@ -377,96 +377,100 @@ export default function SharedReportPage() {
                 borderCollapse: 'collapse',
                 backgroundColor: 'var(--card)',
                 borderRadius: '8px',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                fontSize: '13px'
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Category</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', minWidth: '200px' }}>Category</th>
                     {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
-                      <th key={monthKey} style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>
+                      <th key={monthKey} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>
                         {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
                       </th>
                     ))}
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Total</th>
+                    <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600', whiteSpace: 'nowrap' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryReports.map((cat, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px' }}>{cat.category}</td>
+                      <td style={{ padding: '8px 12px' }}>{cat.category}</td>
                       {Object.keys(cat.monthlyData).sort().map(monthKey => (
-                        <td key={monthKey} style={{ padding: '12px', textAlign: 'right', fontSize: '12px' }}>
-                          ${cat.monthlyData[monthKey].cost.toFixed(2)}
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
+                          {cat.monthlyData[monthKey].cost > 0 ? `$${cat.monthlyData[monthKey].cost.toFixed(2)}` : '-'}
                         </td>
                       ))}
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>${cat.cost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: '600' }}>${cat.cost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td style={{ padding: '12px' }}>TOTAL</td>
+                    <td style={{ padding: '8px 12px' }}>TOTAL</td>
                     {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => {
                       const monthTotal = categoryReports.reduce((sum, cat) => sum + (cat.monthlyData[monthKey]?.cost || 0), 0)
                       return (
-                        <td key={monthKey} style={{ padding: '12px', textAlign: 'right' }}>
+                        <td key={monthKey} style={{ padding: '8px 6px', textAlign: 'right' }}>
                           ${monthTotal.toFixed(2)}
                         </td>
                       )
                     })}
-                    <td style={{ padding: '12px', textAlign: 'right' }}>${categoryReports.reduce((sum, cat) => sum + cat.cost, 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px 6px', textAlign: 'right' }}>${categoryReports.reduce((sum, cat) => sum + cat.cost, 0).toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
             
             {categoryReports.length > 0 && (
-              <div style={{ marginTop: '40px' }}>
-                <h3 style={{ marginBottom: '24px' }}>Category Budget Distribution</h3>
-                <svg viewBox="0 0 200 200" style={{ width: '300px', height: '300px', margin: '0 auto', display: 'block' }}>
-                  {(() => {
-                    const total = categoryReports.reduce((sum, cat) => sum + cat.cost, 0)
-                    let currentAngle = -90
-                    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
-                    
-                    return categoryReports.map((cat, idx) => {
-                      const sliceAngle = (cat.cost / total) * 360
-                      const startAngle = currentAngle
-                      const endAngle = currentAngle + sliceAngle
+              <div style={{ marginTop: '40px', display: 'flex', gap: '40px' }}>
+                <div>
+                  <h3 style={{ marginBottom: '20px' }}>Category Budget Distribution</h3>
+                  <svg viewBox="0 0 200 200" style={{ width: '250px', height: '250px' }}>
+                    {(() => {
+                      const total = categoryReports.reduce((sum, cat) => sum + cat.cost, 0)
+                      let currentAngle = -90
+                      const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
                       
-                      const startRad = (startAngle * Math.PI) / 180
-                      const endRad = (endAngle * Math.PI) / 180
-                      
-                      const x1 = 100 + 80 * Math.cos(startRad)
-                      const y1 = 100 + 80 * Math.sin(startRad)
-                      const x2 = 100 + 80 * Math.cos(endRad)
-                      const y2 = 100 + 80 * Math.sin(endRad)
-                      
-                      const largeArc = sliceAngle > 180 ? 1 : 0
-                      const pathData = [
-                        `M 100 100`,
-                        `L ${x1} ${y1}`,
-                        `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
-                        `Z`
-                      ].join(' ')
-                      
-                      currentAngle = endAngle
-                      
-                      return <path key={idx} d={pathData} fill={colors[idx % colors.length]} />
-                    })
-                  })()}
-                </svg>
-                <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                      return categoryReports.map((cat, idx) => {
+                        const sliceAngle = (cat.cost / total) * 360
+                        const startAngle = currentAngle
+                        const endAngle = currentAngle + sliceAngle
+                        
+                        const startRad = (startAngle * Math.PI) / 180
+                        const endRad = (endAngle * Math.PI) / 180
+                        
+                        const x1 = 100 + 80 * Math.cos(startRad)
+                        const y1 = 100 + 80 * Math.sin(startRad)
+                        const x2 = 100 + 80 * Math.cos(endRad)
+                        const y2 = 100 + 80 * Math.sin(endRad)
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0
+                        const pathData = [
+                          `M 100 100`,
+                          `L ${x1} ${y1}`,
+                          `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
+                          `Z`
+                        ].join(' ')
+                        
+                        currentAngle = endAngle
+                        
+                        return <path key={idx} d={pathData} fill={colors[idx % colors.length]} />
+                      })
+                    })()}
+                  </svg>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'center' }}>
                   {categoryReports.map((cat, idx) => {
                     const total = categoryReports.reduce((sum, c) => sum + c.cost, 0)
                     const percentage = ((cat.cost / total) * 100).toFixed(1)
                     const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
                     return (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                         <span style={{
                           display: 'inline-block',
                           width: '12px',
                           height: '12px',
                           borderRadius: '2px',
-                          backgroundColor: colors[idx % colors.length]
+                          backgroundColor: colors[idx % colors.length],
+                          flexShrink: 0
                         }} />
                         <span>{cat.category}: {percentage}%</span>
                       </div>

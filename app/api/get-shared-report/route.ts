@@ -103,8 +103,14 @@ export async function GET(req: NextRequest) {
 
     // Fetch categories data if needed
     if ((sharedReport as any).categories_report) {
+      const { data: lineItemsData, error: lineItemsError } = await serviceSupabase
+        .from('line_items')
+        .select('*')
+        .eq('user_id', (sharedReport as any).user_id)
+
       reportData.categoriesReport = {
-        shifts: shifts || []
+        shifts: shifts || [],
+        lineItems: lineItemsData || []
       }
     }
 
