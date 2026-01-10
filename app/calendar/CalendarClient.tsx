@@ -1028,14 +1028,6 @@ export default function CalendarClient() {
     try {
       const supabase = getSupabaseClient()
       if (!user) {
-        setCopyDayIsWorking(false)
-        setCopyDayError('You must be signed in to copy shifts.')
-        return
-      }
-      const userId = user.id
-      if (!user) {
-        setCopyShiftIsWorking(false)
-        setCopyShiftError('You must be signed in to copy shifts.')
         return
       }
       const userId = user.id
