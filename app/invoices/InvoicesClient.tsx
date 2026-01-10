@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/app/lib/AuthContext'
+import getSupabaseClient from '@/app/lib/supabaseClient'
 
 interface InvoiceRecord {
   id: string
@@ -50,12 +51,26 @@ export default function InvoicesClient() {
     try {
       setIsLoading(true)
       setError(null)
-      const res = await fetch('/api/list-invoices')
+      
+      // Get the session to include auth token
+      const supabase = getSupabaseClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      }
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      
+      const res = await fetch('/api/list-invoices', { headers })
       if (!res.ok) throw new Error('Failed to fetch invoices')
       const json = await res.json()
       setInvoices(json.data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
+      console.error('Error fetching invoices:', err)
     } finally {
       setIsLoading(false)
     }

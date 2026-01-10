@@ -489,11 +489,9 @@ export default function ReportsClient() {
                         
                         const path = `M 225 225 L ${x1} ${y1} A 180 180 0 ${largeArc} 1 ${x2} ${y2} Z`
                         
-                        // Calculate text position (middle of the slice, 85% towards edge)
+                        // Calculate mid-angle for label placement
                         const midAngle = (startAngle + endAngle) / 2
                         const midRad = (midAngle * Math.PI) / 180
-                        const textX = 225 + 127.5 * Math.cos(midRad)
-                        const textY = 225 + 127.5 * Math.sin(midRad)
                         
                         // Get initials from carer name
                         const initials = carer.carerName
@@ -502,30 +500,82 @@ export default function ReportsClient() {
                           .join('')
                           .toUpperCase()
                         
+                        // Small slice threshold (less than 5%)
+                        const isSmallSlice = sliceAngle < 18
+                        
                         currentAngle = endAngle
                         
-                        return (
-                          <g key={idx}>
-                            <path
-                              d={path}
-                              fill={carer.color}
-                              stroke="var(--card)"
-                              strokeWidth="2"
-                            />
-                            <text
-                              x={textX}
-                              y={textY}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fontSize="14"
-                              fontWeight="bold"
-                              fill="white"
-                              style={{ pointerEvents: 'none' }}
-                            >
-                              {initials}
-                            </text>
-                          </g>
-                        )
+                        if (isSmallSlice) {
+                          // External label with leader line
+                          const labelRadius = 220
+                          const lineStartRadius = 190
+                          const labelX = 225 + labelRadius * Math.cos(midRad)
+                          const labelY = 225 + labelRadius * Math.sin(midRad)
+                          const lineStartX = 225 + lineStartRadius * Math.cos(midRad)
+                          const lineStartY = 225 + lineStartRadius * Math.sin(midRad)
+                          
+                          return (
+                            <g key={idx}>
+                              <path
+                                d={path}
+                                fill={carer.color}
+                                stroke="var(--card)"
+                                strokeWidth="3"
+                              />
+                              <line
+                                x1={lineStartX}
+                                y1={lineStartY}
+                                x2={labelX}
+                                y2={labelY}
+                                stroke={carer.color}
+                                strokeWidth="2"
+                              />
+                              <text
+                                x={labelX}
+                                y={labelY}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="18"
+                                fontWeight="bold"
+                                fill="white"
+                                stroke="#000"
+                                strokeWidth="0.5"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                {initials}
+                              </text>
+                            </g>
+                          )
+                        } else {
+                          // Internal label
+                          const textX = 225 + 127.5 * Math.cos(midRad)
+                          const textY = 225 + 127.5 * Math.sin(midRad)
+                          
+                          return (
+                            <g key={idx}>
+                              <path
+                                d={path}
+                                fill={carer.color}
+                                stroke="var(--card)"
+                                strokeWidth="3"
+                              />
+                              <text
+                                x={textX}
+                                y={textY}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="21"
+                                fontWeight="bold"
+                                fill="white"
+                                stroke="#000"
+                                strokeWidth="0.5"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                {initials}
+                              </text>
+                            </g>
+                          )
+                        }
                       })
                     })()}
                   </svg>
@@ -574,11 +624,9 @@ export default function ReportsClient() {
                         
                         const path = `M 225 225 L ${x1} ${y1} A 180 180 0 ${largeArc} 1 ${x2} ${y2} Z`
                         
-                        // Calculate text position (middle of the slice, 85% towards edge)
+                        // Calculate mid-angle for label placement
                         const midAngle = (startAngle + endAngle) / 2
                         const midRad = (midAngle * Math.PI) / 180
-                        const textX = 225 + 127.5 * Math.cos(midRad)
-                        const textY = 225 + 127.5 * Math.sin(midRad)
                         
                         // Get initials from carer name
                         const initials = carer.carerName
@@ -587,30 +635,82 @@ export default function ReportsClient() {
                           .join('')
                           .toUpperCase()
                         
+                        // Small slice threshold (less than 5%)
+                        const isSmallSlice = sliceAngle < 18
+                        
                         currentAngle = endAngle
                         
-                        return (
-                          <g key={idx}>
-                            <path
-                              d={path}
-                              fill={carer.color}
-                              stroke="var(--card)"
-                              strokeWidth="3"
-                            />
-                            <text
-                              x={textX}
-                              y={textY}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fontSize="21"
-                              fontWeight="bold"
-                              fill="white"
-                              style={{ pointerEvents: 'none' }}
-                            >
-                              {initials}
-                            </text>
-                          </g>
-                        )
+                        if (isSmallSlice) {
+                          // External label with leader line
+                          const labelRadius = 220
+                          const lineStartRadius = 190
+                          const labelX = 225 + labelRadius * Math.cos(midRad)
+                          const labelY = 225 + labelRadius * Math.sin(midRad)
+                          const lineStartX = 225 + lineStartRadius * Math.cos(midRad)
+                          const lineStartY = 225 + lineStartRadius * Math.sin(midRad)
+                          
+                          return (
+                            <g key={idx}>
+                              <path
+                                d={path}
+                                fill={carer.color}
+                                stroke="var(--card)"
+                                strokeWidth="3"
+                              />
+                              <line
+                                x1={lineStartX}
+                                y1={lineStartY}
+                                x2={labelX}
+                                y2={labelY}
+                                stroke={carer.color}
+                                strokeWidth="2"
+                              />
+                              <text
+                                x={labelX}
+                                y={labelY}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="18"
+                                fontWeight="bold"
+                                fill="white"
+                                stroke="#000"
+                                strokeWidth="0.5"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                {initials}
+                              </text>
+                            </g>
+                          )
+                        } else {
+                          // Internal label
+                          const textX = 225 + 127.5 * Math.cos(midRad)
+                          const textY = 225 + 127.5 * Math.sin(midRad)
+                          
+                          return (
+                            <g key={idx}>
+                              <path
+                                d={path}
+                                fill={carer.color}
+                                stroke="var(--card)"
+                                strokeWidth="3"
+                              />
+                              <text
+                                x={textX}
+                                y={textY}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fontSize="21"
+                                fontWeight="bold"
+                                fill="white"
+                                stroke="#000"
+                                strokeWidth="0.5"
+                                style={{ pointerEvents: 'none' }}
+                              >
+                                {initials}
+                              </text>
+                            </g>
+                          )
+                        }
                       })
                     })()}
                   </svg>
@@ -886,6 +986,8 @@ export default function ReportsClient() {
                               fontSize="18"
                               fontWeight="bold"
                               fill="white"
+                              stroke="#000"
+                              strokeWidth="0.5"
                               style={{ pointerEvents: 'none' }}
                             >
                               {abbrev}
@@ -913,6 +1015,8 @@ export default function ReportsClient() {
                               fontSize="21"
                               fontWeight="bold"
                               fill="white"
+                              stroke="#000"
+                              strokeWidth="0.5"
                               style={{ pointerEvents: 'none' }}
                             >
                               {abbrev}
