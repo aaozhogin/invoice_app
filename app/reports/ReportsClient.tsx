@@ -350,20 +350,11 @@ export default function ReportsClient() {
     }
 
     try {
-      const supabase = getSupabaseClient()
-      const { data: { session } } = await supabase.auth.getSession()
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      }
-
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`
-      }
-
       const res = await fetch('/api/share-report', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           carersReport: reports.carersReport,
           lineItemsReport: reports.lineItemsReport,
