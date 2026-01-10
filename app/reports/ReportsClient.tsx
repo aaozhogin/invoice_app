@@ -362,7 +362,7 @@ export default function ReportsClient() {
               <div className="reports-chart-placeholder">
                 <h3>Carers Time Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                  <svg viewBox="0 0 300 300" className="reports-pie-svg">
                     {(() => {
                       let currentAngle = -90
                       const colors = [
@@ -378,14 +378,27 @@ export default function ReportsClient() {
                         const startRad = (startAngle * Math.PI) / 180
                         const endRad = (endAngle * Math.PI) / 180
                         
-                        const x1 = 100 + 80 * Math.cos(startRad)
-                        const y1 = 100 + 80 * Math.sin(startRad)
-                        const x2 = 100 + 80 * Math.cos(endRad)
-                        const y2 = 100 + 80 * Math.sin(endRad)
+                        const x1 = 150 + 120 * Math.cos(startRad)
+                        const y1 = 150 + 120 * Math.sin(startRad)
+                        const x2 = 150 + 120 * Math.cos(endRad)
+                        const y2 = 150 + 120 * Math.sin(endRad)
                         
                         const largeArc = sliceAngle > 180 ? 1 : 0
                         
-                        const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        const path = `M 150 150 L ${x1} ${y1} A 120 120 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        
+                        // Calculate text position (middle of the slice, 80% towards edge)
+                        const midAngle = (startAngle + endAngle) / 2
+                        const midRad = (midAngle * Math.PI) / 180
+                        const textX = 150 + 85 * Math.cos(midRad)
+                        const textY = 150 + 85 * Math.sin(midRad)
+                        
+                        // Get initials from carer name
+                        const initials = carer.carerName
+                          .split(' ')
+                          .map(word => word[0])
+                          .join('')
+                          .toUpperCase()
                         
                         currentAngle = endAngle
                         
@@ -395,8 +408,20 @@ export default function ReportsClient() {
                               d={path}
                               fill={colors[idx % colors.length]}
                               stroke="var(--card)"
-                              strokeWidth="1"
+                              strokeWidth="2"
                             />
+                            <text
+                              x={textX}
+                              y={textY}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize="14"
+                              fontWeight="bold"
+                              fill="white"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {initials}
+                            </text>
                           </g>
                         )
                       })
@@ -430,7 +455,7 @@ export default function ReportsClient() {
               <div className="reports-chart-placeholder">
                 <h3>Carers Total Cost Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <svg viewBox="0 0 200 200" className="reports-pie-svg">
+                  <svg viewBox="0 0 300 300" className="reports-pie-svg">
                     {(() => {
                       let currentAngle = -90
                       const colors = [
@@ -446,14 +471,27 @@ export default function ReportsClient() {
                         const startRad = (startAngle * Math.PI) / 180
                         const endRad = (endAngle * Math.PI) / 180
                         
-                        const x1 = 100 + 80 * Math.cos(startRad)
-                        const y1 = 100 + 80 * Math.sin(startRad)
-                        const x2 = 100 + 80 * Math.cos(endRad)
-                        const y2 = 100 + 80 * Math.sin(endRad)
+                        const x1 = 150 + 120 * Math.cos(startRad)
+                        const y1 = 150 + 120 * Math.sin(startRad)
+                        const x2 = 150 + 120 * Math.cos(endRad)
+                        const y2 = 150 + 120 * Math.sin(endRad)
                         
                         const largeArc = sliceAngle > 180 ? 1 : 0
                         
-                        const path = `M 100 100 L ${x1} ${y1} A 80 80 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        const path = `M 150 150 L ${x1} ${y1} A 120 120 0 ${largeArc} 1 ${x2} ${y2} Z`
+                        
+                        // Calculate text position (middle of the slice, 80% towards edge)
+                        const midAngle = (startAngle + endAngle) / 2
+                        const midRad = (midAngle * Math.PI) / 180
+                        const textX = 150 + 85 * Math.cos(midRad)
+                        const textY = 150 + 85 * Math.sin(midRad)
+                        
+                        // Get initials from carer name
+                        const initials = carer.carerName
+                          .split(' ')
+                          .map(word => word[0])
+                          .join('')
+                          .toUpperCase()
                         
                         currentAngle = endAngle
                         
@@ -463,8 +501,20 @@ export default function ReportsClient() {
                               d={path}
                               fill={colors[idx % colors.length]}
                               stroke="var(--card)"
-                              strokeWidth="1"
+                              strokeWidth="2"
                             />
+                            <text
+                              x={textX}
+                              y={textY}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fontSize="14"
+                              fontWeight="bold"
+                              fill="white"
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              {initials}
+                            </text>
                           </g>
                         )
                       })
@@ -899,8 +949,8 @@ export default function ReportsClient() {
         }
 
         .reports-pie-svg {
-          width: 200px;
-          height: 200px;
+          width: 300px;
+          height: 300px;
           margin: 0 auto 20px;
         }
 
