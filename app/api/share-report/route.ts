@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { carersReport, lineItemsReport, categoriesReport, dateFrom, dateTo } = body
+    const { carersReport, lineItemsReport, categoriesReport, dateFrom, dateTo, hireupMapping } = body
 
     if (!dateFrom || !dateTo) {
       return NextResponse.json({ error: 'Missing date range' }, { status: 400 })
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
           categories_report: categoriesReport,
           date_from: dateFrom,
           date_to: dateTo,
+          hireup_mapping: hireupMapping,
           expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
         }
       ])

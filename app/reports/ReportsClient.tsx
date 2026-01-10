@@ -369,7 +369,8 @@ export default function ReportsClient() {
           lineItemsReport: reports.lineItemsReport,
           categoriesReport: reports.categoriesReport,
           dateFrom,
-          dateTo
+          dateTo,
+          hireupMapping
         })
       })
 

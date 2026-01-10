@@ -13,6 +13,7 @@ interface CarerReport {
 }
 
 interface LineItemReport {
+  seq: number
   category: string
   code: string
   description: string
@@ -56,6 +57,7 @@ export default function SharedReportPage() {
   const [lineItemReports, setLineItemReports] = useState<LineItemReport[]>([])
   const [categoryReports, setCategoryReports] = useState<any[]>([])
   const [carerColorsMap, setCarerColorsMap] = useState<Map<number, string>>(new Map())
+  const [hireupMapping, setHireupMapping] = useState('')
 
   useEffect(() => {
     if (!token) return
@@ -70,16 +72,17 @@ export default function SharedReportPage() {
         }
         const json = await res.json()
         setReportData(json.data)
+        setHireupMapping(json.hireupMapping || '')
 
         // Process report data
         if (json.data.carersReport) {
           processCarersReport(json.data.carersReport, json.data.dateFrom, json.data.dateTo)
         }
         if (json.data.lineItemsReport) {
-          processLineItemsReport(json.data.lineItemsReport, json.data.dateFrom, json.data.dateTo)
+          processLineItemsReport(json.data.lineItemsReport, json.data.dateFrom, json.data.dateTo, json.hireupMapping)
         }
         if (json.data.categoriesReport) {
-          processCategoriesReport(json.data.categoriesReport, json.data.dateFrom, json.data.dateTo)
+          processCategoriesReport(json.data.categoriesReport, json.data.dateFrom, json.data.dateTo, json.hireupMapping)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
@@ -128,18 +131,24 @@ export default function SharedReportPage() {
     setCarerReports(reports)
   }
 
-  const processLineItemsReport = (lineItemsReport: any, dateFrom: string, dateTo: string) => {
+  const processLineItemsReport = (lineItemsReport: any, dateFrom: string, dateTo: string, hireupCode: string) => {
     const { shifts, lineItems } = lineItemsReport
     
     // Build a map of line items by ID
     const lineItemMap = new Map<string, LineItem>(lineItems.map((li: LineItem) => [li.id, li]))
 
     // Group shifts by line item code ID
-    const lineItemTotals = new Map<string, { hours: number; cost: number; code: string; category: string; description: string }>()
+    const lineItemTotals = new Map<string, { seq: number; hours: number; cost: number; code: string; category: string; description: string }>()
+    let seq = 0
 
     shifts.forEach((shift: Shift) => {
       // Get the line item code ID from the shift
-      const codeId = shift.line_item_code_id ? String(shift.line_item_code_id) : null
+      let codeId = shift.line_item_code_id ? String(shift.line_item_code_id) : null
+      
+      // Map HIREUP to selected code
+      if (shift.category === 'HIREUP' && hireupCode) {
+        codeId = hireupCode
+      }
       
       if (!codeId) return
 
@@ -148,8 +157,10 @@ export default function SharedReportPage() {
       const hours = (timeTo.getTime() - timeFrom.getTime()) / (1000 * 60 * 60)
 
       if (!lineItemTotals.has(codeId)) {
+        seq++
         const lineItem = lineItemMap.get(codeId)
         lineItemTotals.set(codeId, {
+          seq,
           hours: 0,
           cost: 0,
           code: lineItem?.code || codeId,
@@ -165,6 +176,7 @@ export default function SharedReportPage() {
 
     const reports = Array.from(lineItemTotals.entries())
       .map(([, total]) => ({
+        seq: total.seq,
         code: total.code,
         category: total.category,
         description: total.description,
@@ -180,7 +192,7 @@ export default function SharedReportPage() {
     setLineItemReports(reports)
   }
 
-  const processCategoriesReport = (categoriesReport: any, dateFrom: string, dateTo: string) => {
+  const processCategoriesReport = (categoriesReport: any, dateFrom: string, dateTo: string, hireupCode: string) => {
     const { shifts } = categoriesReport
     const categoryTotals = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
@@ -314,6 +326,8 @@ export default function SharedReportPage() {
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '50px' }}>Seq</th>
+                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', width: '100px' }}>Code</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Category</th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
                     <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
@@ -323,6 +337,8 @@ export default function SharedReportPage() {
                 <tbody>
                   {lineItemReports.map((item, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>{item.seq}</td>
+                      <td style={{ padding: '12px' }}>{item.code}</td>
                       <td style={{ padding: '12px' }}>{item.category}</td>
                       <td style={{ padding: '12px' }}>{item.description}</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{item.hours.toFixed(2)}</td>
@@ -330,8 +346,7 @@ export default function SharedReportPage() {
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td style={{ padding: '12px' }}>TOTAL</td>
-                    <td style={{ padding: '12px' }}></td>
+                    <td colSpan={4} style={{ padding: '12px' }}>TOTAL</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>{lineItemReports.reduce((sum, item) => sum + item.hours, 0).toFixed(2)}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
                   </tr>

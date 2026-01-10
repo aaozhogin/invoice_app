@@ -117,9 +117,11 @@ export async function GET(req: NextRequest) {
       })
       .eq('id', (sharedReport as any).id)
 
+    // Return report data with hireup mapping
     return NextResponse.json({ 
       success: true,
-      data: reportData
+      data: reportData,
+      hireupMapping: (sharedReport as any).hireup_mapping || ''
     }, { status: 200 })
   } catch (error) {
     console.error('Error fetching shared report:', error)
