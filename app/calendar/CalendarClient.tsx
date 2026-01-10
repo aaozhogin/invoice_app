@@ -203,6 +203,8 @@ export default function CalendarClient() {
     is_public_holiday: false,
     hireup_cost: null
   })
+  const [manualCostOverride, setManualCostOverride] = useState<number | null>(null)
+  const [showManualCostInput, setShowManualCostInput] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const { user, loading: authLoading } = useAuth()
@@ -1756,6 +1758,7 @@ export default function CalendarClient() {
           cost,
           is_sleepover: Boolean((sourceShift as any).is_sleepover),
           is_public_holiday: Boolean((sourceShift as any).is_public_holiday),
+          is_cost_overridden: Boolean((sourceShift as any).is_cost_overridden),
           user_id: user?.id
         }
 
@@ -1979,6 +1982,9 @@ export default function CalendarClient() {
             line_item_code_id: lineItemCodeId,
             category: category,
             cost,
+            is_sleepover: Boolean((s as any).is_sleepover),
+            is_public_holiday: Boolean((s as any).is_public_holiday),
+            is_cost_overridden: Boolean((s as any).is_cost_overridden),
             user_id: user?.id
           }
 
@@ -2256,6 +2262,7 @@ export default function CalendarClient() {
               cost,
               is_sleepover: Boolean((s as any).is_sleepover),
               is_public_holiday: Boolean((s as any).is_public_holiday),
+              is_cost_overridden: Boolean((s as any).is_cost_overridden),
               user_id: user?.id
             })
           }
@@ -2570,7 +2577,7 @@ export default function CalendarClient() {
         }
       }
 
-      const totalCost = calculateCost()
+      const totalCost = manualCostOverride ?? calculateCost()
       
       // Find the correct line item code ID based on category + day type + shift type
       const dayType = getDayTypeFromYmd(newShift.shift_date)
@@ -2640,6 +2647,7 @@ export default function CalendarClient() {
         cost: totalCost,
         is_sleepover: Boolean(newShift.is_sleepover),
         is_public_holiday: Boolean(newShift.is_public_holiday),
+        is_cost_overridden: manualCostOverride !== null,
         user_id: user.id
       }
       
@@ -2675,6 +2683,8 @@ export default function CalendarClient() {
       
       console.log('Shift saved successfully:', data)
       setShowShiftDialog(false)
+      setManualCostOverride(null)
+      setShowManualCostInput(false)
       resetDrag()
       
       // Refresh shifts data to show the new shift
@@ -2998,6 +3008,13 @@ export default function CalendarClient() {
     
     setNewShift(newShiftData)
     setEditingShift(shift)
+    // If the shift was manually overridden, load the override cost
+    if (Boolean((shift as any).is_cost_overridden)) {
+      setManualCostOverride(shift.cost ?? null)
+    } else {
+      setManualCostOverride(null)
+    }
+    setShowManualCostInput(false)
     setShowShiftDialog(true)
   }
 
@@ -4168,6 +4185,7 @@ export default function CalendarClient() {
                       // Check for special shift types
                       const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
                       const { isSleepover: isSleepoverShift, isPublicHoliday: isPublicHolidayShift } = inferShiftFlags(shift)
+                      const hasManualCostOverride = Boolean((shift as any).is_cost_overridden)
                       
                       const highlightColor = isHireup
                         ? '#dc2626'
@@ -4175,7 +4193,9 @@ export default function CalendarClient() {
                           ? '#7c3aed'
                           : isPublicHolidayShift
                             ? '#16a34a'
-                            : null
+                            : hasManualCostOverride
+                              ? '#ffffff'
+                              : null
                       
                       const borderStyle = highlightColor ? `2px solid ${highlightColor}` : `1px solid rgba(200,200,200,0.2)`
                       const shadowStyle = highlightColor ? `0 0 0 2px ${highlightColor}` : 'none'
@@ -4203,6 +4223,7 @@ export default function CalendarClient() {
                           </div>
                           <div style={{ fontSize: '0.75em', marginBottom: '2px', lineHeight: 1.2 }}>
                             ${(shift.cost || 0).toFixed(2)}
+                            {hasManualCostOverride && <span style={{ color: '#ffffff', marginLeft: '4px' }}>⚙️</span>}
                             {!isHireup && shift.category && (
                               <> {shift.category}</>
                             )}
@@ -4371,6 +4392,7 @@ export default function CalendarClient() {
             // Check if this is a HIREUP shift
             const isHireup = ((shift as any).line_items as any)?.category === 'HIREUP' || (shift as any).category === 'HIREUP'
             const { isSleepover: isSleepoverShift, isPublicHoliday: isPublicHolidayShift } = inferShiftFlags(shift)
+            const hasManualCostOverride = Boolean((shift as any).is_cost_overridden)
 
             const displayCategory = (shift as any).category || (shift as any).line_items?.category || 'Unknown Category'
             const displayDescription = (shift as any).line_items?.description || displayCategory
@@ -4385,7 +4407,9 @@ export default function CalendarClient() {
                 ? '#7c3aed'
                 : isPublicHolidayShift
                   ? '#16a34a'
-                  : null
+                  : hasManualCostOverride
+                    ? '#ffffff'
+                    : null
 
             const borderStyle = highlightColor ? `0.5px solid ${highlightColor}` : `2px solid ${hexToRgba(carerColor, 0.5)}`
             const shadowStyle = highlightColor ? `0 0 0 1px ${highlightColor}, inset 0 0 0 1px ${highlightColor}` : 'none'
@@ -4448,6 +4472,7 @@ export default function CalendarClient() {
                   fontWeight: 700
                 }}>
                   {displayStartTime} - {displayEndTime}, {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''} - ${(shift.cost || 0).toFixed(2)}
+                  {hasManualCostOverride && <span style={{ marginLeft: '4px' }}>⚙️</span>}
                   {!isHireup && shift.category && (
                     <> {shift.category}</>
                   )}
@@ -4768,8 +4793,65 @@ export default function CalendarClient() {
                         </div>
                       ))}
                       <div className="cal-breakdown-total">
-                        <strong>Shift total: ${breakdown.total.toFixed(2)}</strong>
+                        <strong>Shift total: ${(manualCostOverride ?? breakdown.total).toFixed(2)}</strong>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualCostInput(!showManualCostInput)}
+                          style={{
+                            marginLeft: '12px',
+                            padding: '4px 8px',
+                            fontSize: '12px',
+                            backgroundColor: 'transparent',
+                            border: '1px solid #cbd5e1',
+                            color: '#cbd5e1',
+                            cursor: 'pointer',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          {manualCostOverride ? '✎ Edit' : '✎ Override'}
+                        </button>
                       </div>
+                      {showManualCostInput && (
+                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <label style={{ fontSize: '14px', color: '#cbd5e1' }}>Override cost:</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Enter cost"
+                            value={manualCostOverride ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? null : Number(e.target.value)
+                              if (val === null || (val > 0 && /^\d+(\.\d{0,2})?$/.test(String(val)))) {
+                                setManualCostOverride(val)
+                              }
+                            }}
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: '4px',
+                              border: '1px solid #334155',
+                              backgroundColor: '#1e293b',
+                              color: '#e2e8f0',
+                              flex: 1
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowManualCostInput(false)}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '12px',
+                              backgroundColor: '#10b981',
+                              border: 'none',
+                              color: '#fff',
+                              cursor: 'pointer',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="cal-cost-display">
@@ -4781,7 +4863,12 @@ export default function CalendarClient() {
             })()}
 
             <div className="cal-dialog-buttons">
-              <button onClick={() => { setShowShiftDialog(false); resetDrag(); }}>Close</button>
+              <button onClick={() => { 
+                setShowShiftDialog(false)
+                setManualCostOverride(null)
+                setShowManualCostInput(false)
+                resetDrag()
+              }}>Close</button>
               {editingShift && (
                 <>
                   <button 
