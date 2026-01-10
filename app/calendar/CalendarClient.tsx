@@ -4222,8 +4222,7 @@ export default function CalendarClient() {
                             {startTime}-{endTime}: {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''}
                           </div>
                           <div style={{ fontSize: '0.75em', marginBottom: '2px', lineHeight: 1.2 }}>
-                            ${(shift.cost || 0).toFixed(2)}
-                            {hasManualCostOverride && <span style={{ color: '#ffffff', marginLeft: '4px' }}>⚙️</span>}
+                            {hasManualCostOverride && <span style={{ color: '#ffffff', marginRight: '4px' }}>⚙️</span>}${(shift.cost || 0).toFixed(2)}
                             {!isHireup && shift.category && (
                               <> {shift.category}</>
                             )}
@@ -4471,8 +4470,7 @@ export default function CalendarClient() {
                   fontSize: `${line1FontPx}px`,
                   fontWeight: 700
                 }}>
-                  {displayStartTime} - {displayEndTime}, {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''} - ${(shift.cost || 0).toFixed(2)}
-                  {hasManualCostOverride && <span style={{ marginLeft: '4px' }}>⚙️</span>}
+                  {displayStartTime} - {displayEndTime}, {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''} - {hasManualCostOverride && <span style={{ marginRight: '4px' }}>⚙️</span>}${(shift.cost || 0).toFixed(2)}
                   {!isHireup && shift.category && (
                     <> {shift.category}</>
                   )}
@@ -4812,7 +4810,7 @@ export default function CalendarClient() {
                         </button>
                       </div>
                       {showManualCostInput && (
-                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'flex-end' }}>
                           <label style={{ fontSize: '14px', color: '#000000', fontWeight: '500' }}>Override cost:</label>
                           <input
                             type="number"
@@ -4832,7 +4830,7 @@ export default function CalendarClient() {
                               border: '1px solid #334155',
                               backgroundColor: '#1e293b',
                               color: '#e2e8f0',
-                              flex: 1
+                              width: '150px'
                             }}
                           />
                           <button
