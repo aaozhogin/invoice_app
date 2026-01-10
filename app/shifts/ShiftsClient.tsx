@@ -706,6 +706,7 @@ export default function ShiftsClient() {
                 Cost{renderSortArrow('cost')}
               </th>
               <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -737,11 +738,27 @@ export default function ShiftsClient() {
                 <td>{shift.line_items?.description || 'N/A'}</td>
                 <td>${shift.cost.toFixed(2)}</td>
                 <td>{shift.notes || '—'}</td>
+                <td className="actions">
+                  <button 
+                    onClick={() => handleEdit(shift)}
+                    className="edit-btn"
+                    title="Edit"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(shift.id)}
+                    className="delete-btn"
+                    title="Delete"
+                  >
+                    🗑️ Delete
+                  </button>
+                </td>
               </tr>
             ))}
             {shifts.length === 0 && (
               <tr>
-                <td colSpan={12} className="no-data">No shifts found</td>
+                <td colSpan={13} className="no-data">No shifts found</td>
               </tr>
             )}
           </tbody>
