@@ -182,12 +182,15 @@ export default function SharedReportPage() {
 
   const processCategoriesReport = (categoriesReport: any, dateFrom: string, dateTo: string) => {
     const { shifts } = categoriesReport
-    const categoryTotals = new Map<string, { hours: number; cost: number }>()
+    const categoryTotals = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shifts.forEach((shift: Shift) => {
       const category = shift.category || 'Uncategorized'
+      const shiftDate = new Date(shift.shift_date)
+      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      
       if (!categoryTotals.has(category)) {
-        categoryTotals.set(category, { hours: 0, cost: 0 })
+        categoryTotals.set(category, { hours: 0, cost: 0, monthlyData: new Map() })
       }
 
       const timeFrom = new Date(shift.time_from)
@@ -197,13 +200,31 @@ export default function SharedReportPage() {
       const total = categoryTotals.get(category)!
       total.hours += hours
       total.cost += shift.cost
+
+      if (!total.monthlyData.has(monthKey)) {
+        total.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const monthData = total.monthlyData.get(monthKey)!
+      monthData.hours += hours
+      monthData.cost += shift.cost
     })
 
-    const reports = Array.from(categoryTotals.entries()).map(([category, total]) => ({
-      category,
-      hours: total.hours,
-      cost: total.cost
-    }))
+    const reports = Array.from(categoryTotals.entries()).map(([category, data]) => {
+      const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+      data.monthlyData.forEach((value, key) => {
+        monthlyDataObj[key] = {
+          hours: Math.round(value.hours * 100) / 100,
+          cost: Math.round(value.cost * 100) / 100
+        }
+      })
+      
+      return {
+        category,
+        hours: Math.round(data.hours * 100) / 100,
+        cost: Math.round(data.cost * 100) / 100,
+        monthlyData: monthlyDataObj
+      }
+    }).sort((a, b) => b.cost - a.cost)
 
     setCategoryReports(reports)
   }
@@ -266,9 +287,14 @@ export default function SharedReportPage() {
                         {carer.carerName}
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{carer.shiftHours.toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>£{carer.totalCost.toFixed(2)}</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>${carer.totalCost.toFixed(2)}</td>
                     </tr>
                   ))}
+                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
+                    <td style={{ padding: '12px' }}>TOTAL</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>{carerReports.reduce((sum, carer) => sum + carer.shiftHours, 0).toFixed(2)}</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>${carerReports.reduce((sum, carer) => sum + carer.totalCost, 0).toFixed(2)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -300,9 +326,15 @@ export default function SharedReportPage() {
                       <td style={{ padding: '12px' }}>{item.category}</td>
                       <td style={{ padding: '12px' }}>{item.description}</td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>{item.hours.toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>£{item.cost.toFixed(2)}</td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>${item.cost.toFixed(2)}</td>
                     </tr>
                   ))}
+                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
+                    <td style={{ padding: '12px' }}>TOTAL</td>
+                    <td style={{ padding: '12px' }}></td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>{lineItemReports.reduce((sum, item) => sum + item.hours, 0).toFixed(2)}</td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>${lineItemReports.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -310,8 +342,8 @@ export default function SharedReportPage() {
         )}
 
         {reportData?.categoriesReport && categoryReports.length > 0 && (
-          <section>
-            <h2 style={{ marginBottom: '24px' }}>Categories Report</h2>
+          <section style={{ marginBottom: '48px' }}>
+            <h2 style={{ marginBottom: '24px' }}>Line Item Categories</h2>
             <div style={{ overflowX: 'auto' }}>
               <table style={{
                 width: '100%',
@@ -323,21 +355,99 @@ export default function SharedReportPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Category</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Cost</th>
+                    {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => (
+                      <th key={monthKey} style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>
+                        {new Date(`${monthKey}-01`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                      </th>
+                    ))}
+                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryReports.map((cat, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '12px' }}>{cat.category}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{cat.hours.toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>£{cat.cost.toFixed(2)}</td>
+                      {Object.keys(cat.monthlyData).sort().map(monthKey => (
+                        <td key={monthKey} style={{ padding: '12px', textAlign: 'right', fontSize: '12px' }}>
+                          ${cat.monthlyData[monthKey].cost.toFixed(2)}
+                        </td>
+                      ))}
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>${cat.cost.toFixed(2)}</td>
                     </tr>
                   ))}
+                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
+                    <td style={{ padding: '12px' }}>TOTAL</td>
+                    {Object.keys(categoryReports[0]?.monthlyData || {}).sort().map(monthKey => {
+                      const monthTotal = categoryReports.reduce((sum, cat) => sum + (cat.monthlyData[monthKey]?.cost || 0), 0)
+                      return (
+                        <td key={monthKey} style={{ padding: '12px', textAlign: 'right' }}>
+                          ${monthTotal.toFixed(2)}
+                        </td>
+                      )
+                    })}
+                    <td style={{ padding: '12px', textAlign: 'right' }}>${categoryReports.reduce((sum, cat) => sum + cat.cost, 0).toFixed(2)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
+            
+            {categoryReports.length > 0 && (
+              <div style={{ marginTop: '40px' }}>
+                <h3 style={{ marginBottom: '24px' }}>Category Budget Distribution</h3>
+                <svg viewBox="0 0 200 200" style={{ width: '300px', height: '300px', margin: '0 auto', display: 'block' }}>
+                  {(() => {
+                    const total = categoryReports.reduce((sum, cat) => sum + cat.cost, 0)
+                    let currentAngle = -90
+                    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+                    
+                    return categoryReports.map((cat, idx) => {
+                      const sliceAngle = (cat.cost / total) * 360
+                      const startAngle = currentAngle
+                      const endAngle = currentAngle + sliceAngle
+                      
+                      const startRad = (startAngle * Math.PI) / 180
+                      const endRad = (endAngle * Math.PI) / 180
+                      
+                      const x1 = 100 + 80 * Math.cos(startRad)
+                      const y1 = 100 + 80 * Math.sin(startRad)
+                      const x2 = 100 + 80 * Math.cos(endRad)
+                      const y2 = 100 + 80 * Math.sin(endRad)
+                      
+                      const largeArc = sliceAngle > 180 ? 1 : 0
+                      const pathData = [
+                        `M 100 100`,
+                        `L ${x1} ${y1}`,
+                        `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
+                        `Z`
+                      ].join(' ')
+                      
+                      currentAngle = endAngle
+                      
+                      return <path key={idx} d={pathData} fill={colors[idx % colors.length]} />
+                    })
+                  })()}
+                </svg>
+                <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                  {categoryReports.map((cat, idx) => {
+                    const total = categoryReports.reduce((sum, c) => sum + c.cost, 0)
+                    const percentage = ((cat.cost / total) * 100).toFixed(1)
+                    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
+                    return (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '2px',
+                          backgroundColor: colors[idx % colors.length]
+                        }} />
+                        <span>{cat.category}: {percentage}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>
