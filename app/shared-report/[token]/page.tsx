@@ -311,19 +311,20 @@ export default function SharedReportPage() {
                 borderCollapse: 'collapse',
                 backgroundColor: 'var(--card)',
                 borderRadius: '8px',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                fontSize: '13px'
               }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Carer</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
-                    <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>Total Cost</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600' }}>Carer</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600' }}>Hours</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: '600' }}>Total Cost</th>
                   </tr>
                 </thead>
                 <tbody>
                   {carerReports.map((carer) => (
                     <tr key={carer.carerId} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <td style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{
                           display: 'inline-block',
                           width: '12px',
@@ -333,18 +334,77 @@ export default function SharedReportPage() {
                         }} />
                         {carer.carerName}
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>{carer.shiftHours.toFixed(2)}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>${carer.totalCost.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{carer.shiftHours.toFixed(2)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>${carer.totalCost.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: '600', backgroundColor: 'var(--bg)' }}>
-                    <td style={{ padding: '12px' }}>TOTAL</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>{carerReports.reduce((sum, carer) => sum + carer.shiftHours, 0).toFixed(2)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right' }}>${carerReports.reduce((sum, carer) => sum + carer.totalCost, 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px 12px' }}>TOTAL</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>{carerReports.reduce((sum, carer) => sum + carer.shiftHours, 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' }}>${carerReports.reduce((sum, carer) => sum + carer.totalCost, 0).toFixed(2)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
+
+            {carerReports.length > 0 && (
+              <div style={{ marginTop: '40px', display: 'flex', gap: '60px', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ marginBottom: '20px' }}>Carer Cost Distribution</h3>
+                  <svg viewBox="0 0 200 200" style={{ width: '400px', height: '400px' }}>
+                    {(() => {
+                      const total = carerReports.reduce((sum, carer) => sum + carer.totalCost, 0)
+                      let currentAngle = -90
+                      
+                      return carerReports.map((carer, idx) => {
+                        const sliceAngle = (carer.totalCost / total) * 360
+                        const startAngle = currentAngle
+                        const endAngle = currentAngle + sliceAngle
+                        
+                        const startRad = (startAngle * Math.PI) / 180
+                        const endRad = (endAngle * Math.PI) / 180
+                        
+                        const x1 = 100 + 80 * Math.cos(startRad)
+                        const y1 = 100 + 80 * Math.sin(startRad)
+                        const x2 = 100 + 80 * Math.cos(endRad)
+                        const y2 = 100 + 80 * Math.sin(endRad)
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0
+                        const pathData = [
+                          `M 100 100`,
+                          `L ${x1} ${y1}`,
+                          `A 80 80 0 ${largeArc} 1 ${x2} ${y2}`,
+                          `Z`
+                        ].join(' ')
+                        
+                        currentAngle = endAngle
+                        
+                        return <path key={idx} d={pathData} fill={carer.color} />
+                      })
+                    })()}
+                  </svg>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'flex-start', paddingTop: '60px' }}>
+                  {carerReports.map((carer, idx) => {
+                    const total = carerReports.reduce((sum, c) => sum + c.totalCost, 0)
+                    const percentage = ((carer.totalCost / total) * 100).toFixed(1)
+                    return (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: carer.color,
+                          flexShrink: 0
+                        }} />
+                        <span>{carer.carerName}: {percentage}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
