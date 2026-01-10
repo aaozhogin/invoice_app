@@ -1587,6 +1587,12 @@ export default function CalendarClient() {
 
     try {
       const supabase = getSupabaseClient()
+      if (!user) {
+        setCopyShiftIsWorking(false)
+        setCopyShiftError('You must be signed in to copy shifts.')
+        return
+      }
+      const userId = user.id
       const sourceShift = editingShift
       const startTime = isoToLocalHhmm(sourceShift.time_from)
       const endTime = isoToLocalHhmm(sourceShift.time_to)
@@ -2061,6 +2067,12 @@ export default function CalendarClient() {
 
     try {
       const supabase = getSupabaseClient()
+      if (!user) {
+        setCopyWeekIsWorking(false)
+        setCopyWeekError('You must be signed in to copy shifts.')
+        return
+      }
+      const userId = user.id
       const allInserts: any[] = []
       const weeksWithOverlaps: string[] = []
 
@@ -2092,8 +2104,8 @@ export default function CalendarClient() {
           const prevTargetYmd = toYmdLocal(prevTargetDay)
 
           const [currentDayShiftsRes, prevDayShiftsRes] = await Promise.all([
-            supabase.from('shifts').select('*').eq('shift_date', targetYmd).eq('user_id', user?.id).eq('client_id', selectedClientId),
-            supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd).eq('user_id', user?.id).eq('client_id', selectedClientId)
+            supabase.from('shifts').select('*').eq('shift_date', targetYmd).eq('user_id', userId).eq('client_id', selectedClientId),
+            supabase.from('shifts').select('*').eq('shift_date', prevTargetYmd).eq('user_id', userId).eq('client_id', selectedClientId)
           ])
 
           const targetDayStart = buildUtcIsoFromLocal(targetYmd, '00:00')
