@@ -1716,8 +1716,13 @@ export default function CalendarClient() {
         let cost: number
         let lineItemCodeId: string | null = null
         const category = (sourceShift as any).category || (sourceShift as any).line_items?.category
+        const isCostOverridden = Boolean((sourceShift as any).is_cost_overridden)
 
-        if (category === 'HIREUP') {
+        if (isCostOverridden) {
+          // Preserve manual override cost
+          cost = Number(sourceShift.cost || 0)
+          lineItemCodeId = category === 'HIREUP' ? null : ((sourceShift as any).line_item_code_id || null)
+        } else if (category === 'HIREUP') {
           cost = Number(sourceShift.cost || 0)
           lineItemCodeId = null
         } else {
@@ -1935,9 +1940,14 @@ export default function CalendarClient() {
 
           let cost: number
           let lineItemCodeId: string | null = null
+          const isCostOverridden = Boolean((s as any).is_cost_overridden)
 
-          // Handle HIREUP shifts specially
-          if (category === 'HIREUP') {
+          // Handle manual override first
+          if (isCostOverridden) {
+            cost = Number(s.cost || 0)
+            lineItemCodeId = category === 'HIREUP' ? null : ((s as any).line_item_code_id || null)
+          } else if (category === 'HIREUP') {
+            // Handle HIREUP shifts specially
             cost = Number(s.cost || 0)
             lineItemCodeId = null
           } else {
@@ -2221,8 +2231,13 @@ export default function CalendarClient() {
 
             let cost: number
             let lineItemCodeId: string | null = null
+            const isCostOverridden = Boolean((s as any).is_cost_overridden)
 
-            if (category === 'HIREUP') {
+            if (isCostOverridden) {
+              // Preserve manual override cost
+              cost = Number(s.cost || 0)
+              lineItemCodeId = category === 'HIREUP' ? null : ((s as any).line_item_code_id || null)
+            } else if (category === 'HIREUP') {
               cost = Number(s.cost || 0)
               lineItemCodeId = null
             } else {
