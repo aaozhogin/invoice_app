@@ -19,7 +19,7 @@ export default function HomePage() {
         fontWeight: 700,
         textAlign: 'center'
       }}>
-        OML NDIS Invoice App
+        OML NDIS app
       </h1>
       
       <p style={{ 

@@ -616,7 +616,7 @@ export default function LineItemCodesClient() {
         </div>
       )}
 
-      {categories.length > 0 && (
+      {(
         <div className="categories-table" style={{ marginTop: 16, marginBottom: 32 }}>
           <div className="categories-header">
             <div>Seq</div>
@@ -660,6 +660,11 @@ export default function LineItemCodesClient() {
               </div>
             </div>
           ))}
+          {categories.length === 0 && (
+            <div style={{ padding: '16px', textAlign: 'center', color: '#999' }}>
+              No categories created yet. Add one using the button above.
+            </div>
+          )}
         </div>
       )}
 
