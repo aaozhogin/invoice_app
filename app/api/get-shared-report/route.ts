@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
       .from('shared_reports')
       .select('*')
       .eq('share_token', shareToken)
-      .eq('is_active', true)
       .single() as any
 
     if (reportError || !sharedReport) {
