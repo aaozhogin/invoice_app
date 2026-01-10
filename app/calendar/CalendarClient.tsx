@@ -1638,6 +1638,24 @@ export default function CalendarClient() {
           endDateTime = buildUtcIsoFromLocal(nextDayStr, endTime)
         }
 
+        // Check for carer overlap - same carer cannot have overlapping shifts
+        const carerHasOverlap = allExistingShifts.some(existing => {
+          if (existing.carer_id !== sourceShift.carer_id) return false
+          
+          const existingStart = new Date(existing.time_from).getTime()
+          const existingEnd = new Date(existing.time_to).getTime()
+          const newStart = new Date(startDateTime).getTime()
+          const newEnd = new Date(endDateTime).getTime()
+          
+          return newStart < existingEnd && newEnd > existingStart
+        })
+        
+        if (carerHasOverlap) {
+          setCopyShiftError(`Cannot copy shift to ${targetYmd}: This carer already has an overlapping shift on that date.`)
+          setCopyShiftIsWorking(false)
+          return
+        }
+
         // Check for triple overlap using sweep line algorithm
         const newStart = new Date(startDateTime).getTime()
         const newEnd = new Date(endDateTime).getTime()
@@ -1895,6 +1913,25 @@ export default function CalendarClient() {
           if (endMinutes <= startMinutes) {
             const nextDayStr = addDaysToYmd(targetYmd, 1)
             endDateTime = buildUtcIsoFromLocal(nextDayStr, endTime)
+          }
+
+          // Check for carer overlap - same carer cannot have overlapping shifts
+          const carerHasOverlap = originalExistingShifts.some(existing => {
+            if (existing.carer_id !== s.carer_id) return false
+            
+            const existingStart = new Date(existing.time_from).getTime()
+            const existingEnd = new Date(existing.time_to).getTime()
+            const newStart = new Date(startDateTime).getTime()
+            const newEnd = new Date(endDateTime).getTime()
+            
+            return newStart < existingEnd && newEnd > existingStart
+          })
+          
+          if (carerHasOverlap) {
+            if (!daysWithOverlaps.includes(targetYmd)) {
+              daysWithOverlaps.push(targetYmd)
+            }
+            continue // Skip this shift
           }
 
           // Check for triple overlap - only against ORIGINAL existing shifts, not shifts being copied in this operation
@@ -2155,6 +2192,25 @@ export default function CalendarClient() {
 
             const newStart = new Date(startDateTime).getTime()
             const newEnd = new Date(endDateTime).getTime()
+
+            // Check for carer overlap - same carer cannot have overlapping shifts
+            const carerHasOverlap = originalExistingShifts.some(existing => {
+              if (existing.carer_id !== s.carer_id) return false
+              
+              const existingStart = new Date(existing.time_from).getTime()
+              const existingEnd = new Date(existing.time_to).getTime()
+              
+              return newStart < existingEnd && newEnd > existingStart
+            })
+            
+            if (carerHasOverlap) {
+              console.log(`  ❌ Carer overlap detected! Skipping this shift.`)
+              if (!weeksWithOverlaps.includes(targetWeekStart)) {
+                weeksWithOverlaps.push(targetWeekStart)
+              }
+              dayHasOverlapError = true
+              continue
+            }
 
             // Collect all overlapping shifts with the new shift
             const overlappingShifts = []
