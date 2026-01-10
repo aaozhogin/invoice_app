@@ -4803,7 +4803,7 @@ export default function CalendarClient() {
                             fontSize: '12px',
                             backgroundColor: 'transparent',
                             border: '1px solid #64748b',
-                            color: '#f1f5f9',
+                            color: '#000000',
                             cursor: 'pointer',
                             borderRadius: '4px'
                           }}
@@ -4813,7 +4813,7 @@ export default function CalendarClient() {
                       </div>
                       {showManualCostInput && (
                         <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <label style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: '500' }}>Override cost:</label>
+                          <label style={{ fontSize: '14px', color: '#000000', fontWeight: '500' }}>Override cost:</label>
                           <input
                             type="number"
                             min="0"
