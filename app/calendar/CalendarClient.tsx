@@ -4164,6 +4164,9 @@ export default function CalendarClient() {
                           </div>
                           <div style={{ fontSize: '0.75em', marginBottom: '2px', lineHeight: 1.2 }}>
                             ${(shift.cost || 0).toFixed(2)}
+                            {!isHireup && shift.category && (
+                              <> {shift.category}</>
+                            )}
                             {(isSleepoverShift || isPublicHolidayShift || isHireup) && (
                               <>
                                 {' '}
@@ -4406,6 +4409,9 @@ export default function CalendarClient() {
                   fontWeight: 700
                 }}>
                   {displayStartTime} - {displayEndTime}, {shift.carers?.first_name || 'Unknown'}{shift.carers?.last_name ? ` ${shift.carers.last_name}` : ''} - ${(shift.cost || 0).toFixed(2)}
+                  {!isHireup && shift.category && (
+                    <> {shift.category}</>
+                  )}
                   {(isSleepoverShift || isPublicHolidayShift || isHireup) && (
                     <>
                       {' '}
