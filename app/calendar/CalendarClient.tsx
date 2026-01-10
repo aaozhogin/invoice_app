@@ -4576,7 +4576,14 @@ export default function CalendarClient() {
             <div className="cal-time-controls">
               <div className="cal-time-group">
                 <label>Start Time:</label>
-                <div className="cal-time-input-group">
+              <div className="cal-time-input-group">
+                  <button 
+                    type="button"
+                    className="cal-time-btn"
+                    onClick={() => handleTimeAdjustment('start_time', -60)}
+                  >
+                    -1h
+                  </button>
                   <button 
                     type="button"
                     className="cal-time-btn"
@@ -4592,12 +4599,26 @@ export default function CalendarClient() {
                   >
                     +15m
                   </button>
+                  <button 
+                    type="button"
+                    className="cal-time-btn"
+                    onClick={() => handleTimeAdjustment('start_time', 60)}
+                  >
+                    +1h
+                  </button>
                 </div>
               </div>
               
               <div className="cal-time-group">
                 <label>End Time:</label>
                 <div className="cal-time-input-group">
+                  <button 
+                    type="button"
+                    className="cal-time-btn"
+                    onClick={() => handleTimeAdjustment('end_time', -60)}
+                  >
+                    -1h
+                  </button>
                   <button 
                     type="button"
                     className="cal-time-btn"
@@ -4617,6 +4638,13 @@ export default function CalendarClient() {
                     onClick={() => handleTimeAdjustment('end_time', 15)}
                   >
                     +15m
+                  </button>
+                  <button 
+                    type="button"
+                    className="cal-time-btn"
+                    onClick={() => handleTimeAdjustment('end_time', 60)}
+                  >
+                    +1h
                   </button>
                 </div>
               </div>
