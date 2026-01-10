@@ -5,6 +5,7 @@ import crypto from 'crypto'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
 function generateShareToken(): string {
   return crypto.randomBytes(32).toString('hex')
@@ -46,8 +47,11 @@ export async function POST(req: NextRequest) {
     // Generate a unique share token
     const shareToken = generateShareToken()
 
+    // Create service client to bypass RLS for insert
+    const serviceSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
     // Insert into shared_reports table
-    const { data, error } = await (supabase as any)
+    const { data, error } = await (serviceSupabase as any)
       .from('shared_reports')
       .insert([
         {
