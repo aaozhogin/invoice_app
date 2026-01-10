@@ -197,19 +197,31 @@ export default function SharedReportPage() {
     const categoryTotals = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shifts.forEach((shift: Shift) => {
-      const category = shift.category || 'Uncategorized'
+      let categoryName = shift.category || 'Uncategorized'
+      
+      // If this is a HIREUP shift and we have a mapping, use the mapped line item's category
+      if (shift.category === 'HIREUP' && hireupCode && shift.line_item_code_id) {
+        // The category should come from the line item, not from the shift
+        // Since we don't have lineItems in categoriesReport, we keep it as HIREUP
+        // This matches the actual report behavior
+        categoryName = 'HIREUP'
+      } else if (shift.line_item_code_id) {
+        // For non-HIREUP shifts, we should use the shift's category as is
+        categoryName = shift.category || 'Uncategorized'
+      }
+      
       const shiftDate = new Date(shift.shift_date)
       const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
       
-      if (!categoryTotals.has(category)) {
-        categoryTotals.set(category, { hours: 0, cost: 0, monthlyData: new Map() })
+      if (!categoryTotals.has(categoryName)) {
+        categoryTotals.set(categoryName, { hours: 0, cost: 0, monthlyData: new Map() })
       }
 
       const timeFrom = new Date(shift.time_from)
       const timeTo = new Date(shift.time_to)
       const hours = (timeTo.getTime() - timeFrom.getTime()) / (1000 * 60 * 60)
 
-      const total = categoryTotals.get(category)!
+      const total = categoryTotals.get(categoryName)!
       total.hours += hours
       total.cost += shift.cost
 
