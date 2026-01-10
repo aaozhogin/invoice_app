@@ -144,6 +144,7 @@ export type Database = {
           cost: number;
           shift_date: string;
           category?: string | null;
+          notes?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -156,6 +157,7 @@ export type Database = {
           cost: number;
           shift_date: string;
           category?: string | null;
+          notes?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -168,6 +170,7 @@ export type Database = {
           cost?: number;
           shift_date?: string;
           category?: string | null;
+          notes?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

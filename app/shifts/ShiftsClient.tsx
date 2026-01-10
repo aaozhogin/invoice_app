@@ -14,6 +14,7 @@ interface Shift {
   line_item_code_id: string | null
   cost: number
   shift_date: string
+  notes?: string | null
   created_at?: string
   updated_at?: string
   // Relations
@@ -620,15 +621,6 @@ export default function ShiftsClient() {
     <div className="main-content">
       <div className="page-header">
         <h1>Shifts</h1>
-        <button 
-          className="add-button"
-          onClick={() => {
-            resetForm();
-            setFormVisible(true);
-          }}
-        >
-          + Add Shift
-        </button>
       </div>
       <style jsx>{`
         .page-header { margin-bottom: 12px; }
@@ -637,153 +629,6 @@ export default function ShiftsClient() {
       {error && (
         <div className="error-message">
           {error}
-        </div>
-      )}
-
-      {formVisible && (
-        <div className="modal-overlay" onClick={() => setFormVisible(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingId ? 'Edit Shift' : 'Add New Shift'}</h2>
-              <button onClick={() => setFormVisible(false)} className="close-btn">&times;</button>
-            </div>
-
-            <form onSubmit={e => e.preventDefault()} className="form-content">
-              <div className="form-group">
-                <label>Shift Date:</label>
-                <input
-                  type="date"
-                  value={form.shiftDate}
-                  onChange={e => setForm({...form, shiftDate: e.target.value})}
-                  required
-                />
-              </div>
-
-              <div className="form-row compact">
-                <div className="form-group">
-                  <label>Time From:</label>
-                  <input
-                    type="time"
-                    value={form.timeFrom}
-                    onChange={e => setForm({...form, timeFrom: e.target.value})}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Time To:</label>
-                  <input
-                    type="time"
-                    value={form.timeTo}
-                    onChange={e => setForm({...form, timeTo: e.target.value})}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Carer:</label>
-                <select
-                  value={form.carerId}
-                  onChange={e => setForm({...form, carerId: e.target.value})}
-                  required
-                >
-                  <option value="">Select Carer</option>
-                  {carers.map(carer => (
-                    <option key={carer.id} value={carer.id}>
-                      {carer.first_name} {carer.last_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Client:</label>
-                <select
-                  value={form.clientId}
-                  onChange={e => setForm({...form, clientId: e.target.value})}
-                >
-                  <option value="">Select Client</option>
-                  {clients.map(client => (
-                    <option key={client.id} value={client.id}>
-                      {client.first_name} {client.last_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Line Item Category:</label>
-                <select
-                  value={form.category}
-                  onChange={e => setForm({...form, category: e.target.value})}
-                  required
-                >
-                  <option value="">Select Category</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {form.category === 'HIREUP' && (
-                <div className="form-group">
-                  <label>HIREUP Cost:</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.hireupCost}
-                    onChange={(e) => setForm({ ...form, hireupCost: e.target.value })}
-                    placeholder="Enter cost"
-                  />
-                </div>
-              )}
-
-              {costBreakdown.length > 0 && (
-                <div className="cost-breakdown">
-                  <h3>Cost Breakdown</h3>
-                  <table className="breakdown-table" border={0} style={{ border: 'none' }}>
-                    <thead>
-                      <tr>
-                        <th>Description</th>
-                        <th>Rate</th>
-                        <th>Hours</th>
-                        <th>Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {costBreakdown.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.description}</td>
-                          <td>${item.rate.toFixed(2)}/hr</td>
-                          <td>{item.hours.toFixed(2)}</td>
-                          <td>${item.cost.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                      <tr className="total-row">
-                        <td colSpan={3} style={{ borderRight: '1px solid #cbd5e1' }}><strong>Total:</strong></td>
-                        <td style={{ borderRight: 'none', borderLeft: 'none' }}><strong>${getTotalCost().toFixed(2)}</strong></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <div className="form-actions">
-                <button type="button" onClick={() => setFormVisible(false)} className="secondary-btn">Cancel</button>
-                <button 
-                  type="button" 
-                  onClick={editingId ? handleUpdate : handleAdd}
-                  className="primary-button"
-                >
-                  {editingId ? 'Update Shift' : 'Add Shift'}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
 
@@ -860,7 +705,7 @@ export default function ShiftsClient() {
               <th onClick={() => handleSort('cost')} style={{ cursor: 'pointer' }}>
                 Cost{renderSortArrow('cost')}
               </th>
-              <th>Actions</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -891,27 +736,12 @@ export default function ShiftsClient() {
                 <td>{shift.line_items?.code || 'N/A'}</td>
                 <td>{shift.line_items?.description || 'N/A'}</td>
                 <td>${shift.cost.toFixed(2)}</td>
-                <td className="actions">
-                  <button 
-                    onClick={() => handleEdit(shift)}
-                    className="edit-btn"
-                    title="Edit"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(shift.id)}
-                    className="delete-btn"
-                    title="Delete"
-                  >
-                    🗑️ Delete
-                  </button>
-                </td>
+                <td>{shift.notes || '—'}</td>
               </tr>
             ))}
             {shifts.length === 0 && (
               <tr>
-                <td colSpan={11} className="no-data">No shifts found</td>
+                <td colSpan={12} className="no-data">No shifts found</td>
               </tr>
             )}
           </tbody>

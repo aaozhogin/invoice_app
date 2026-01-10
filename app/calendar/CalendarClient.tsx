@@ -16,6 +16,7 @@ interface Shift {
   cost: number
   shift_date: string
   category?: string | null
+  notes?: string | null
   created_at?: string
   updated_at?: string
   // Relations
@@ -80,6 +81,7 @@ interface NewShift {
   is_sleepover: boolean
   is_public_holiday: boolean
   hireup_cost?: number | null
+  notes?: string | null
 }
 
 // Helper to initialize currentDate from localStorage
@@ -201,7 +203,8 @@ export default function CalendarClient() {
     line_item_code_id: null,
     is_sleepover: false,
     is_public_holiday: false,
-    hireup_cost: null
+    hireup_cost: null,
+    notes: null
   })
   const [manualCostOverride, setManualCostOverride] = useState<number | null>(null)
   const [showManualCostInput, setShowManualCostInput] = useState(false)
@@ -1782,6 +1785,7 @@ export default function CalendarClient() {
           is_sleepover: Boolean((sourceShift as any).is_sleepover),
           is_public_holiday: Boolean((sourceShift as any).is_public_holiday),
           is_cost_overridden: Boolean((sourceShift as any).is_cost_overridden),
+          notes: sourceShift.notes || null,
           user_id: user?.id
         }
 
@@ -2334,6 +2338,7 @@ export default function CalendarClient() {
               is_sleepover: Boolean((s as any).is_sleepover),
               is_public_holiday: Boolean((s as any).is_public_holiday),
               is_cost_overridden: Boolean((s as any).is_cost_overridden),
+              notes: s.notes || null,
               user_id: user?.id
             })
           }
@@ -2719,6 +2724,7 @@ export default function CalendarClient() {
         is_sleepover: Boolean(newShift.is_sleepover),
         is_public_holiday: Boolean(newShift.is_public_holiday),
         is_cost_overridden: manualCostOverride !== null,
+        notes: newShift.notes || null,
         user_id: user.id
       }
       
@@ -3072,7 +3078,8 @@ export default function CalendarClient() {
       line_item_code_id: selectedLineItemId,
       is_sleepover: isSleepover,
       is_public_holiday: isPublicHoliday,
-      hireup_cost: selectedCategory === 'HIREUP' ? Number(shift.cost ?? 0) || null : null
+      hireup_cost: selectedCategory === 'HIREUP' ? Number(shift.cost ?? 0) || null : null,
+      notes: shift.notes || null
     }
     
     console.log('📝 Setting newShift to:', newShiftData)
@@ -4872,6 +4879,24 @@ export default function CalendarClient() {
                 </div>
               </div>
             )}
+
+            <div className="cal-form-group">
+              <label>Notes:</label>
+              <textarea
+                value={newShift.notes || ''}
+                onChange={(e) => setNewShift((prev) => ({ ...prev, notes: e.target.value || null }))}
+                placeholder="Enter shift notes (optional)"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontFamily: 'inherit',
+                  minHeight: '80px',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
 
             {/* Cost breakdown by line item code */}
             {(() => {
