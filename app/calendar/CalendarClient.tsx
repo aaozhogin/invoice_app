@@ -4200,12 +4200,12 @@ export default function CalendarClient() {
                         border: 'none',
                         borderRadius: '3px',
                         cursor: 'pointer',
-                        opacity: 0,
+                        opacity: 0.35,
                         transition: 'opacity 0.2s',
                         marginRight: '4px'
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
+                      onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.35')}
                       title="Delete all shifts for this day"
                     >
                       Delete all
