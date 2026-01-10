@@ -445,6 +445,11 @@ export default function CalendarClient() {
       setLineItemCodes(lineItemCodesRes.data || [])
       setClients(clientsRes.data || [])
       
+      // Auto-select first client if none is selected
+      if (!selectedClientId && clientsRes.data && clientsRes.data.length > 0) {
+        setSelectedClientId(clientsRes.data[0].id)
+      }
+      
       // Manually join clients data with shifts
       const clientsMap = new Map((clientsRes.data || []).map(client => [client.id, client]))
       const shiftsWithClients = allShifts.map(shift => ({
@@ -2484,7 +2489,7 @@ export default function CalendarClient() {
       // Validate that client is selected (from form or top menu)
       const clientForShift = newShift.client_id ?? selectedClientId
       if (!clientForShift) {
-        setError('Please select a client')
+        setError('Please select a client from the dropdown menu at the top of the page')
         return
       }
       
