@@ -50,6 +50,11 @@ interface LineItem {
   description: string | null
 }
 
+// Utility function to generate month key from date
+const getMonthKey = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function SharedReportPage() {
   const params = useParams()
   const token = params?.token as string
@@ -103,7 +108,7 @@ export default function SharedReportPage() {
     const colorsMap = new Map<number, string>(carers.map((c: Carer) => [c.id, c.color || '#888']))
     setCarerColorsMap(colorsMap)
 
-    const carerTotals = new Map<number, { hours: number; cost: number; name: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
+    const carerTotals = new Map<number, { seq: number; hours: number; cost: number; name: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
     let seq = 0
 
     shifts.forEach((shift: Shift) => {
@@ -116,10 +121,11 @@ export default function SharedReportPage() {
       const hours = (timeTo.getTime() - timeFrom.getTime()) / (1000 * 60 * 60)
 
       const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      const monthKey = getMonthKey(shiftDate)
 
       if (!carerTotals.has(carerId)) {
-        carerTotals.set(carerId, { hours: 0, cost: 0, name: `${carer.first_name} ${carer.last_name}`, monthlyData: new Map() })
+        seq++
+        carerTotals.set(carerId, { seq, hours: 0, cost: 0, name: `${carer.first_name} ${carer.last_name}`, monthlyData: new Map() })
       }
 
       const total = carerTotals.get(carerId)!
@@ -135,7 +141,6 @@ export default function SharedReportPage() {
     })
 
     const reports = Array.from(carerTotals.entries()).map(([carerId, total]) => {
-      seq++
       const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
       total.monthlyData.forEach((value, key) => {
         monthlyDataObj[key] = {
@@ -144,7 +149,7 @@ export default function SharedReportPage() {
         }
       })
       return {
-        seq,
+        seq: total.seq,
         carerId,
         carerName: total.name,
         shiftHours: Math.round(total.hours * 100) / 100,
@@ -194,7 +199,7 @@ export default function SharedReportPage() {
       total.cost += shift.cost
 
       const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      const monthKey = getMonthKey(shiftDate)
       if (!total.monthlyData.has(monthKey)) {
         total.monthlyData.set(monthKey, { hours: 0, cost: 0 })
       }
@@ -250,7 +255,7 @@ export default function SharedReportPage() {
       }
       
       const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      const monthKey = getMonthKey(shiftDate)
       
       if (!categoryTotals.has(categoryName)) {
         categoryTotals.set(categoryName, { hours: 0, cost: 0, monthlyData: new Map() })
@@ -314,13 +319,22 @@ export default function SharedReportPage() {
     if (!reportData?.dateFrom || !reportData?.dateTo) return [] as string[]
     const start = new Date(reportData.dateFrom)
     const end = new Date(reportData.dateTo)
+    
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return [] as string[]
+    if (start > end) return [] as string[]
+    
     start.setDate(1)
     end.setDate(1)
     const keys: string[] = []
     const d = new Date(start)
-    while (d <= end) {
-      keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    
+    // Safety: limit to 24 months max to prevent infinite loop
+    let iterations = 0
+    while (d <= end && iterations < 24) {
+      keys.push(getMonthKey(d))
       d.setMonth(d.getMonth() + 1)
+      iterations++
     }
     return keys
   })()
@@ -643,7 +657,9 @@ export default function SharedReportPage() {
                         const mr = 55
                         const mx = 100 + mr * Math.cos((midAngle * Math.PI) / 180)
                         const my = 100 + mr * Math.sin((midAngle * Math.PI) / 180)
-                        const abbr = cat.category.split(' ').map((w: string) => w[0]).join('').slice(0,4).toUpperCase()
+                        // Smart abbreviation: take first letter of first 3-4 words, or use full word if single
+                        const words = cat.category.split(' ').filter((w: string) => w.length > 0)
+                        const abbr = words.length === 1 ? words[0].slice(0, 4).toUpperCase() : words.slice(0, 4).map((w: string) => w[0]).join('').toUpperCase()
 
                         currentAngle = endAngle
                         
