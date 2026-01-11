@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     const carers = carersData as Database['public']['Tables']['carers']['Row'][]
 
     // Preload all line items for reliable lookup (RLS-safe with user_id)
-    const lineItemMap = new Map<number, { code: string | null; description: string | null; billed_rate: number | null }>()
+    const lineItemMap = new Map<string, { code: string | null; description: string | null; billed_rate: number | null }>()
     if (userId) {
       const { data: allLineItems } = await supabase
         .from('line_items')
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         .eq('user_id', userId)
       const items: any[] = (allLineItems as any[]) || []
       items.forEach((li: any) => {
-        lineItemMap.set(Number(li.id), { code: li.code || null, description: li.description || null, billed_rate: li.billed_rate ?? null })
+        lineItemMap.set(String(li.id), { code: li.code || null, description: li.description || null, billed_rate: li.billed_rate ?? null })
       })
     }
 
@@ -126,7 +126,7 @@ export async function POST(req: Request) {
         line_item_code_id,
         category,
         clients:client_id(id, first_name, last_name, address, ndis_number),
-        line_items:line_item_code_id(id, code, description, billed_rate)
+        line_items(id, code, description, billed_rate)
       `)
       .in('carer_id', carerIds)
       .gte('shift_date', dateFrom)
@@ -157,10 +157,10 @@ export async function POST(req: Request) {
       time_to: string
       cost: number | null
       carer_id: number
-      line_item_code_id: number | null
+      line_item_code_id: string | null
       category: string | null
       clients: { id: number; first_name: string; last_name: string; address: string | null; ndis_number: string | null } | null
-      line_items: { id: number; code: string | null; description: string | null; billed_rate: number | null } | null
+      line_items: { id: string; code: string | null; description: string | null; billed_rate: number | null } | null
     }> | null
 
     let clientQuery = supabase.from('clients').select('*').eq('id', clientId)
@@ -393,7 +393,7 @@ export async function POST(req: Request) {
       sortedShifts.forEach((shift, idx) => {
         // Prefer nested relation, fall back to preloaded map by line_item_code_id
         const rel = shift.line_items
-        const fallback = shift.line_item_code_id != null ? lineItemMap.get(Number(shift.line_item_code_id)) || null : null
+        const fallback = shift.line_item_code_id != null ? lineItemMap.get(String(shift.line_item_code_id)) || null : null
         const lineItemDesc = (rel?.description ?? fallback?.description ?? '')
         const lineItemCode = (rel?.code ?? fallback?.code ?? '')
         const billedRate = (rel?.billed_rate ?? fallback?.billed_rate ?? null)
