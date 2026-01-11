@@ -104,7 +104,9 @@ export default function ReportsClient() {
           query = query.lte('shift_date', dateTo)
         }
 
-        const { data: shiftsData } = await query
+        const { data: shiftsData, error: shiftsError } = await query
+        
+        console.log('📊 Reports fetch:', { dateFrom, dateTo, shiftsCount: shiftsData?.length, shiftsError, sampleShifts: shiftsData?.slice(0, 3).map(s => ({ date: s.shift_date, carerId: s.carer_id })) })
 
         if (shiftsData) {
           // Fetch carers for enrichment
