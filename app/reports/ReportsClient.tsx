@@ -194,8 +194,6 @@ export default function ReportsClient() {
     const categoryMap = new Map<string, { hours: number; cost: number; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shiftsData.forEach(shift => {
-      if (!shift.carers) return
-      
       const duration = calculateDuration(shift.time_from, shift.time_to)
       const key = shift.carer_id
       const monthKey = (shift.shift_date && shift.shift_date.length >= 7)
@@ -206,7 +204,7 @@ export default function ReportsClient() {
         carerMap.set(key, {
           hours: 0,
           cost: 0,
-          name: `${shift.carers.first_name} ${shift.carers.last_name}`,
+          name: shift.carers ? `${shift.carers.first_name} ${shift.carers.last_name}` : `Unknown Carer (ID: ${key})`,
           monthlyData: new Map()
         })
       }
