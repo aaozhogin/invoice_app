@@ -20,6 +20,7 @@ interface LineItemReport {
   description: string
   hours: number
   cost: number
+  monthlyData?: { [monthKey: string]: { hours: number; cost: number } }
 }
 
 interface LineItemCode {
@@ -243,7 +244,7 @@ export default function ReportsClient() {
     setCarerReports(carerReportArray)
 
     // Calculate line item code reports
-    const lineItemMap = new Map<string, { hours: number; cost: number; code: string; category: string; description: string }>()
+    const lineItemMap = new Map<string, { hours: number; cost: number; code: string; category: string; description: string; monthlyData: Map<string, { hours: number; cost: number }> }>()
 
     shiftsData.forEach(shift => {
       let codeId: string | null = null
@@ -268,7 +269,8 @@ export default function ReportsClient() {
           cost: 0,
           code: lineItem?.code || codeId,
           category: categoryName,
-          description: lineItem?.description || ''
+          description: lineItem?.description || '',
+          monthlyData: new Map()
         })
       }
 
@@ -294,16 +296,34 @@ export default function ReportsClient() {
       const categoryMonthData = categoryBucket.monthlyData.get(monthKey)!
       categoryMonthData.hours += duration
       categoryMonthData.cost += shift.cost || 0
+
+      // Track monthly data for the specific line item code
+      if (!current.monthlyData.has(monthKey)) {
+        current.monthlyData.set(monthKey, { hours: 0, cost: 0 })
+      }
+      const codeMonthData = current.monthlyData.get(monthKey)!
+      codeMonthData.hours += duration
+      codeMonthData.cost += shift.cost || 0
     })
 
     const lineItemReportArray = Array.from(lineItemMap.entries())
-      .map(([codeId, data]) => ({
-        category: data.category,
-        code: data.code,
-        description: data.description,
-        hours: Math.round(data.hours * 100) / 100,
-        cost: Math.round(data.cost * 100) / 100
-      }))
+      .map(([codeId, data]) => {
+        const monthlyDataObj: { [key: string]: { hours: number; cost: number } } = {}
+        data.monthlyData.forEach((value, key) => {
+          monthlyDataObj[key] = {
+            hours: Math.round(value.hours * 100) / 100,
+            cost: Math.round(value.cost * 100) / 100
+          }
+        })
+        return {
+          category: data.category,
+          code: data.code,
+          description: data.description,
+          hours: Math.round(data.hours * 100) / 100,
+          cost: Math.round(data.cost * 100) / 100,
+          monthlyData: monthlyDataObj
+        }
+      })
       .sort((a, b) => {
         const categoryCompare = a.category.localeCompare(b.category)
         if (categoryCompare !== 0) return categoryCompare
@@ -534,7 +554,7 @@ export default function ReportsClient() {
               <div className="reports-chart-placeholder">
                 <h3>Carers Time Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '450px', height: '450px' }}>
+                  <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '600px', height: '600px' }}>
                     {(() => {
                       let currentAngle = -90
                       
@@ -669,7 +689,7 @@ export default function ReportsClient() {
               <div className="reports-chart-placeholder">
                 <h3>Carers Total Cost Distribution</h3>
                 {carerReports.length > 0 ? (
-                  <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '450px', height: '450px' }}>
+                  <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '600px', height: '600px' }}>
                     {(() => {
                       let currentAngle = -90
                       
@@ -911,6 +931,73 @@ export default function ReportsClient() {
               </table>
             </div>
 
+            {/* Line Item Codes Monthly Breakdown */}
+            <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Line Item Codes by Month</h3>
+            <div className="reports-table-wrapper">
+              <table className="reports-table">
+                <thead>
+                  <tr>
+                    <th>Seq</th>
+                    <th>Code</th>
+                    {getMonthKeys().map(monthKey => (
+                      <th key={monthKey} style={{ textAlign: 'right' }}>
+                        {formatMonthKey(monthKey)}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineItemReports.length === 0 ? (
+                    <tr>
+                      <td colSpan={3 + getMonthKeys().length} style={{ textAlign: 'center' }}>
+                        No data for selected period
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {lineItemReports.map((item, idx) => (
+                        <tr key={`${item.code}-monthly-${idx}`}>
+                          <td>{idx + 1}</td>
+                          <td>{item.code}</td>
+                          {getMonthKeys().map(monthKey => {
+                            const monthData = item.monthlyData?.[monthKey]
+                            return (
+                              <td key={monthKey} style={{ textAlign: 'right' }}>
+                                {monthData ? `$${monthData.cost.toFixed(2)}` : '-'}
+                              </td>
+                            )
+                          })}
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                            ${item.cost.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="reports-total-row">
+                        <td colSpan={2} style={{ fontWeight: 'bold' }}>
+                          TOTAL
+                        </td>
+                        {getMonthKeys().map(monthKey => {
+                          const monthTotal = lineItemReports.reduce((sum, li) => {
+                            const monthData = li.monthlyData?.[monthKey]
+                            return sum + (monthData?.cost || 0)
+                          }, 0)
+                          return (
+                            <td key={monthKey} style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                              ${monthTotal.toFixed(2)}
+                            </td>
+                          )
+                        })}
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                          ${lineItemTotalCost.toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
             <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Line Item Categories</h3>
             <div className="reports-table-wrapper">
               <table className="reports-table">
@@ -981,7 +1068,7 @@ export default function ReportsClient() {
             <h3 style={{ marginTop: '32px', marginBottom: '12px' }}>Category Budget Distribution</h3>
             <div className="reports-table-wrapper" style={{ maxWidth: '600px' }}>
               {categoryReports.length > 0 ? (
-                <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '450px', height: '450px' }}>
+                <svg viewBox="0 0 450 450" className="reports-pie-svg" style={{ width: '600px', height: '600px' }}>
                   {(() => {
                     let currentAngle = -90
                     const totalCost = categoryTotalCost || 1
