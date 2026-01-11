@@ -324,10 +324,14 @@ export default function SharedReportPage() {
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return [] as string[]
     if (start > end) return [] as string[]
     
+    // Set start to first day of start month
     start.setDate(1)
-    end.setDate(1)
+    // Set end to last day of end month to include shifts on the last day
+    end.setMonth(end.getMonth() + 1, 0)
+    
     const keys: string[] = []
     const d = new Date(start)
+    d.setDate(1) // Ensure we start at day 1
     
     // Safety: limit to 24 months max to prevent infinite loop
     let iterations = 0
