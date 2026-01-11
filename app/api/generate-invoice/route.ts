@@ -101,6 +101,19 @@ export async function POST(req: Request) {
 
     const carers = carersData as Database['public']['Tables']['carers']['Row'][]
 
+    // Preload all line items for reliable lookup (RLS-safe with user_id)
+    const lineItemMap = new Map<number, { code: string | null; description: string | null; billed_rate: number | null }>()
+    if (userId) {
+      const { data: allLineItems } = await supabase
+        .from('line_items')
+        .select('id, code, description, billed_rate, user_id')
+        .eq('user_id', userId)
+      const items: any[] = (allLineItems as any[]) || []
+      items.forEach((li: any) => {
+        lineItemMap.set(Number(li.id), { code: li.code || null, description: li.description || null, billed_rate: li.billed_rate ?? null })
+      })
+    }
+
     let shiftsQuery = supabase
       .from('shifts')
       .select(`
@@ -378,11 +391,18 @@ export async function POST(req: Request) {
       let totalAmount = 0
 
       sortedShifts.forEach((shift, idx) => {
-        const lineItemDesc = shift.line_items?.description || ''
-        const lineItemCode = shift.line_items?.code || ''
+        // Prefer nested relation, fall back to preloaded map by line_item_code_id
+        const rel = shift.line_items
+        const fallback = shift.line_item_code_id != null ? lineItemMap.get(Number(shift.line_item_code_id)) || null : null
+        const lineItemDesc = (rel?.description ?? fallback?.description ?? '')
+        const lineItemCode = (rel?.code ?? fallback?.code ?? '')
+        const billedRate = (rel?.billed_rate ?? fallback?.billed_rate ?? null)
+
         const hours = getHours(shift.time_from, shift.time_to)
-        const rate = shift.line_items?.billed_rate ?? ''
-        const amount = typeof shift.cost === 'number' ? shift.cost : (typeof rate === 'number' ? (rate as number) * hours : '')
+        const amount = typeof shift.cost === 'number' ? shift.cost : (typeof billedRate === 'number' && hours > 0 ? (billedRate as number) * hours : '')
+        const unitRate = (typeof shift.cost === 'number' && hours > 0)
+          ? parseFloat((shift.cost / hours).toFixed(2))
+          : (typeof billedRate === 'number' ? parseFloat((billedRate as number).toFixed(2)) : '')
         
         if (typeof amount === 'number') {
           totalAmount += amount
@@ -433,8 +453,8 @@ export async function POST(req: Request) {
         row.getCell(9).alignment = { horizontal: 'center' }
         row.getCell(9).font = { size: 10 }
 
-        // Unit Price (merged F-G and J-K above)
-        row.getCell(10).value = typeof rate === 'number' ? parseFloat(rate.toFixed(2)) : (rate || '')
+        // Unit Price (merged F-G and J-K above) — derive from shift cost/hours when available
+        row.getCell(10).value = unitRate
         row.getCell(10).numFmt = '0.00'
         row.getCell(10).alignment = { horizontal: 'center' }
         row.getCell(10).font = { size: 10 }
