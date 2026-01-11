@@ -161,24 +161,25 @@ export default function ReportsClient() {
     }
   }, [shifts, hireupMapping, lineItemCodes, carerColorsMap])
 
-  // Helper to generate month keys from date range
+  // Helper to generate month keys from date range (timezone-safe, string-based)
   const getMonthKeys = (): string[] => {
     if (!dateFrom || !dateTo) return []
+
+    const yf = parseInt(dateFrom.slice(0, 4), 10)
+    const mf = parseInt(dateFrom.slice(5, 7), 10)
+    const yt = parseInt(dateTo.slice(0, 4), 10)
+    const mt = parseInt(dateTo.slice(5, 7), 10)
+
+    let y = yf
+    let m = mf
+    const result: string[] = []
     
-    const months: string[] = []
-    const start = new Date(dateFrom)
-    const end = new Date(dateTo)
-    
-    const current = new Date(start.getFullYear(), start.getMonth(), 1)
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1)
-    
-    while (current <= endMonth) {
-      const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
-      months.push(monthKey)
-      current.setMonth(current.getMonth() + 1)
+    while (y < yt || (y === yt && m <= mt)) {
+      result.push(`${y}-${String(m).padStart(2, '0')}`)
+      m++
+      if (m > 12) { m = 1; y++ }
     }
-    
-    return months
+    return result
   }
 
   const formatMonthKey = (monthKey: string): string => {
@@ -197,8 +198,9 @@ export default function ReportsClient() {
       
       const duration = calculateDuration(shift.time_from, shift.time_to)
       const key = shift.carer_id
-      const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      const monthKey = (shift.shift_date && shift.shift_date.length >= 7)
+        ? shift.shift_date.substring(0, 7)
+        : ''
       
       if (!carerMap.has(key)) {
         carerMap.set(key, {
@@ -279,8 +281,9 @@ export default function ReportsClient() {
       current.cost += shift.cost || 0
 
       // Track category data with monthly breakdown
-      const shiftDate = new Date(shift.shift_date)
-      const monthKey = `${shiftDate.getFullYear()}-${String(shiftDate.getMonth() + 1).padStart(2, '0')}`
+      const monthKey = (shift.shift_date && shift.shift_date.length >= 7)
+        ? shift.shift_date.substring(0, 7)
+        : ''
       
       if (!categoryMap.has(categoryName)) {
         categoryMap.set(categoryName, { hours: 0, cost: 0, monthlyData: new Map() })
