@@ -20,6 +20,21 @@ interface InvoiceRequestBody {
   timezoneOffset?: number // Browser's timezone offset in minutes
 }
 
+type LineItemMeta = {
+  id: string
+  code: string | null
+  description: string | null
+  billed_rate: number | null
+  category: string | null
+  sleepover: boolean | null
+  public_holiday: boolean | null
+  time_from: string | null
+  time_to: string | null
+  weekday: boolean | null
+  saturday: boolean | null
+  sunday: boolean | null
+}
+
 const squareTokenRegex = /\[([^\]]+)\]/g
 
 function replaceTokens(text: string, values: Record<string, string>): string {
@@ -102,15 +117,28 @@ export async function POST(req: Request) {
     const carers = carersData as Database['public']['Tables']['carers']['Row'][]
 
     // Preload all line items for reliable lookup (RLS-safe with user_id)
-    const lineItemMap = new Map<string, { code: string | null; description: string | null; billed_rate: number | null }>()
+    const lineItemMap = new Map<string, LineItemMeta>()
     if (userId) {
       const { data: allLineItems } = await supabase
         .from('line_items')
-        .select('id, code, description, billed_rate, user_id')
+        .select('id, code, description, billed_rate, category, sleepover, public_holiday, time_from, time_to, weekday, saturday, sunday, user_id')
         .eq('user_id', userId)
       const items: any[] = (allLineItems as any[]) || []
       items.forEach((li: any) => {
-        lineItemMap.set(String(li.id), { code: li.code || null, description: li.description || null, billed_rate: li.billed_rate ?? null })
+        lineItemMap.set(String(li.id), {
+          id: String(li.id),
+          code: li.code ?? null,
+          description: li.description ?? null,
+          billed_rate: li.billed_rate ?? null,
+          category: li.category ?? null,
+          sleepover: li.sleepover ?? null,
+          public_holiday: li.public_holiday ?? null,
+          time_from: li.time_from ?? null,
+          time_to: li.time_to ?? null,
+          weekday: li.weekday ?? null,
+          saturday: li.saturday ?? null,
+          sunday: li.sunday ?? null
+        })
       })
     }
 
@@ -125,8 +153,11 @@ export async function POST(req: Request) {
         carer_id,
         line_item_code_id,
         category,
+        is_sleepover,
+        is_public_holiday,
+        is_cost_overridden,
         clients:client_id(id, first_name, last_name, address, ndis_number),
-        line_items(id, code, description, billed_rate)
+        line_items(id, code, description, billed_rate, category, sleepover, public_holiday, time_from, time_to, weekday, saturday, sunday)
       `)
       .in('carer_id', carerIds)
       .gte('shift_date', dateFrom)
@@ -159,8 +190,24 @@ export async function POST(req: Request) {
       carer_id: number
       line_item_code_id: string | null
       category: string | null
+      is_sleepover?: boolean | null
+      is_public_holiday?: boolean | null
+      is_cost_overridden?: boolean | null
       clients: { id: number; first_name: string; last_name: string; address: string | null; ndis_number: string | null } | null
-      line_items: { id: string; code: string | null; description: string | null; billed_rate: number | null } | null
+      line_items: {
+        id: string
+        code: string | null
+        description: string | null
+        billed_rate: number | null
+        category?: string | null
+        sleepover?: boolean | null
+        public_holiday?: boolean | null
+        time_from?: string | null
+        time_to?: string | null
+        weekday?: boolean | null
+        saturday?: boolean | null
+        sunday?: boolean | null
+      } | null
     }> | null
 
     let clientQuery = supabase.from('clients').select('*').eq('id', clientId)
@@ -367,6 +414,145 @@ export async function POST(req: Request) {
       return `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`
     }
 
+    const getDayTypeFromYmd = (ymd: string): 'weekday' | 'saturday' | 'sunday' => {
+      const d = new Date(`${ymd}T00:00:00`)
+      const day = d.getUTCDay()
+      if (day === 0) return 'sunday'
+      if (day === 6) return 'saturday'
+      return 'weekday'
+    }
+
+    const lineItemMatchesDayType = (li: LineItemMeta, dayType: 'weekday' | 'saturday' | 'sunday') => {
+      switch (dayType) {
+        case 'weekday':
+          return li.weekday === true || (li.weekday == null && li.saturday !== true && li.sunday !== true)
+        case 'saturday':
+          return li.saturday === true
+        case 'sunday':
+          return li.sunday === true
+        default:
+          return false
+      }
+    }
+
+    const parseHHMMToMinutes = (timeStr: string | null | undefined): number | null => {
+      if (!timeStr) return null
+      const parts = timeStr.split(':').map(Number)
+      if (parts.length < 2) return null
+      const [h, m] = parts
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+      return h * 60 + m
+    }
+
+    const toLocalMinutesFromIso = (iso: string | null | undefined): number | null => {
+      if (!iso) return null
+      const dt = new Date(iso)
+      if (Number.isNaN(dt.getTime())) return null
+      const local = new Date(dt.getTime() + timezoneOffset * 60 * 1000)
+      return local.getUTCHours() * 60 + local.getUTCMinutes()
+    }
+
+    const isTimeInWindow = (minutes: number, from: string | null | undefined, to: string | null | undefined) => {
+      const start = parseHHMMToMinutes(from)
+      const end = parseHHMMToMinutes(to)
+      if (start == null || end == null) return true
+      if (end <= start) {
+        return minutes >= start || minutes < end
+      }
+      return minutes >= start && minutes < end
+    }
+
+    const computeOverlapMinutes = (li: LineItemMeta, startMinutes: number, endMinutes: number) => {
+      let shiftStart = startMinutes
+      let shiftEnd = endMinutes
+      if (shiftEnd <= shiftStart) shiftEnd += 24 * 60
+
+      const liStart = parseHHMMToMinutes(li.time_from)
+      const liEnd = parseHHMMToMinutes(li.time_to)
+
+      const overlap = (a1: number, a2: number, b1: number, b2: number) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1))
+
+      if (liStart == null || liEnd == null) return Math.max(0, shiftEnd - shiftStart)
+
+      if (liEnd <= liStart) {
+        return overlap(shiftStart, shiftEnd, liStart, 24 * 60) + overlap(shiftStart, shiftEnd, 0, liEnd + 24 * 60)
+      }
+
+      return overlap(shiftStart, shiftEnd, liStart, liEnd)
+    }
+
+    const pickLineItemForShift = (shift: any): LineItemMeta | null => {
+      const category = shift.category ?? shift.line_items?.category ?? null
+      const mapCandidates = category
+        ? Array.from(lineItemMap.values()).filter(li => li.category === category)
+        : Array.from(lineItemMap.values())
+
+      const relationCandidates: LineItemMeta[] = shift.line_items
+        ? [{
+            id: String(shift.line_items.id),
+            code: shift.line_items.code ?? null,
+            description: shift.line_items.description ?? null,
+            billed_rate: shift.line_items.billed_rate ?? null,
+            category: (shift.line_items as any).category ?? category,
+            sleepover: (shift.line_items as any).sleepover ?? null,
+            public_holiday: (shift.line_items as any).public_holiday ?? null,
+            time_from: (shift.line_items as any).time_from ?? null,
+            time_to: (shift.line_items as any).time_to ?? null,
+            weekday: (shift.line_items as any).weekday ?? null,
+            saturday: (shift.line_items as any).saturday ?? null,
+            sunday: (shift.line_items as any).sunday ?? null
+          }]
+        : []
+
+      const baseCandidates = mapCandidates.length ? mapCandidates : relationCandidates
+      if (!baseCandidates.length) return null
+
+      const dayType = getDayTypeFromYmd(shift.shift_date)
+      const isSleepover = Boolean(shift.is_sleepover)
+      const isPublicHoliday = Boolean(shift.is_public_holiday)
+      const startMinutes = toLocalMinutesFromIso(shift.time_from)
+      const rawEndMinutes = toLocalMinutesFromIso(shift.time_to)
+      const endMinutes = (startMinutes != null && rawEndMinutes != null && rawEndMinutes <= startMinutes)
+        ? rawEndMinutes + 24 * 60
+        : rawEndMinutes
+
+      const filteredByDay = baseCandidates.filter(li => {
+        if (isPublicHoliday) return true
+        return lineItemMatchesDayType(li, dayType)
+      })
+
+      const dayCandidates = filteredByDay.length ? filteredByDay : baseCandidates
+
+      const sortByCode = (items: LineItemMeta[]) =>
+        items
+          .slice()
+          .sort((a, b) => String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { sensitivity: 'base' }))
+
+      const filterByShiftType = (items: LineItemMeta[]) => {
+        if (isSleepover) return items.filter(li => li.sleepover === true)
+        if (isPublicHoliday) return items.filter(li => li.public_holiday === true && li.sleepover !== true)
+        return items.filter(li => li.public_holiday !== true && li.sleepover !== true)
+      }
+
+      const typeCandidates = filterByShiftType(dayCandidates)
+      const pool = typeCandidates.length ? typeCandidates : dayCandidates
+
+      if (startMinutes == null) return sortByCode(pool)[0] || null
+
+      const startMatches = pool.filter(li => isTimeInWindow(startMinutes, li.time_from, li.time_to))
+      if (startMatches.length === 1) return startMatches[0]
+      if (startMatches.length > 1) return sortByCode(startMatches)[0]
+
+      if (endMinutes != null) {
+        const ranked = pool
+          .map(li => ({ li, overlap: computeOverlapMinutes(li, startMinutes, endMinutes) }))
+          .sort((a, b) => (b.overlap - a.overlap) || String(a.li.code ?? '').localeCompare(String(b.li.code ?? ''), undefined, { sensitivity: 'base' }))
+        if (ranked[0]?.overlap > 0) return ranked[0].li
+      }
+
+      return sortByCode(pool)[0] || null
+    }
+
     // Clear placeholder rows in the template
     for (let i = dataStartRow; i <= Math.min(dataStartRow + 20, sheet.rowCount); i++) {
       const row = sheet.getRow(i)
@@ -391,12 +577,13 @@ export async function POST(req: Request) {
       let totalAmount = 0
 
       sortedShifts.forEach((shift, idx) => {
-        // Prefer nested relation, fall back to preloaded map by line_item_code_id
+        // Prefer time-aware selection; fall back to stored relations
         const rel = shift.line_items
         const fallback = shift.line_item_code_id != null ? lineItemMap.get(String(shift.line_item_code_id)) || null : null
-        const lineItemDesc = (rel?.description ?? fallback?.description ?? '')
-        const lineItemCode = (rel?.code ?? fallback?.code ?? '')
-        const billedRate = (rel?.billed_rate ?? fallback?.billed_rate ?? null)
+        const selectedLineItem = pickLineItemForShift(shift)
+        const lineItemDesc = selectedLineItem?.description ?? rel?.description ?? fallback?.description ?? ''
+        const lineItemCode = selectedLineItem?.code ?? rel?.code ?? fallback?.code ?? ''
+        const billedRate = selectedLineItem?.billed_rate ?? rel?.billed_rate ?? fallback?.billed_rate ?? null
 
         const hours = getHours(shift.time_from, shift.time_to)
         const amount = typeof shift.cost === 'number' ? shift.cost : (typeof billedRate === 'number' && hours > 0 ? (billedRate as number) * hours : '')

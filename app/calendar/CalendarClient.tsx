@@ -1468,6 +1468,8 @@ export default function CalendarClient() {
     dayType: 'weekday' | 'saturday' | 'sunday'
     isSleepover: boolean
     isPublicHoliday: boolean
+    startTime?: string
+    endTime?: string
   }): LineItemCode | null => {
     const matchingForShift = lineItemCodes
       .filter(li => li.category === opts.category)
@@ -1479,6 +1481,8 @@ export default function CalendarClient() {
         .slice()
         .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0] || null
 
+    if (matchingForShift.length === 0) return null
+
     if (opts.isSleepover) {
       const pool = matchingForShift.filter(li => li.sleepover === true)
       if (opts.isPublicHoliday) {
@@ -1486,8 +1490,66 @@ export default function CalendarClient() {
       }
       return pick(pool)
     }
-    if (opts.isPublicHoliday) return pick(matchingForShift.filter(li => li.public_holiday === true && li.sleepover !== true))
-    return pick(matchingForShift.filter(li => li.public_holiday !== true && li.sleepover !== true))
+
+    const basePool = opts.isPublicHoliday
+      ? matchingForShift.filter(li => li.public_holiday === true && li.sleepover !== true)
+      : matchingForShift.filter(li => li.public_holiday !== true && li.sleepover !== true)
+
+    const pool = basePool.length > 0 ? basePool : matchingForShift
+    if (pool.length === 0) return null
+
+    const parseToMinutes = (t?: string): number | null => {
+      if (!t) return null
+      const [h, m] = t.split(':').map(Number)
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null
+      return h * 60 + m
+    }
+
+    const startMinutes = parseToMinutes(opts.startTime)
+    const rawEndMinutes = parseToMinutes(opts.endTime)
+    const endMinutes = (startMinutes != null && rawEndMinutes != null && rawEndMinutes <= startMinutes)
+      ? rawEndMinutes + 24 * 60
+      : rawEndMinutes
+
+    const isInWindow = (minutes: number, li: LineItemCode) => {
+      const liStart = parseToMinutes(li.time_from as any)
+      const liEnd = parseToMinutes(li.time_to as any)
+      if (liStart == null || liEnd == null) return true
+      if (liEnd <= liStart) return minutes >= liStart || minutes < liEnd
+      return minutes >= liStart && minutes < liEnd
+    }
+
+    const overlapMinutes = (li: LineItemCode) => {
+      if (startMinutes == null || endMinutes == null) return 0
+      let shiftStart = startMinutes
+      let shiftEnd = endMinutes
+      if (shiftEnd <= shiftStart) shiftEnd += 24 * 60
+
+      const liStart = parseToMinutes(li.time_from as any)
+      const liEnd = parseToMinutes(li.time_to as any)
+      const overlap = (a1: number, a2: number, b1: number, b2: number) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1))
+
+      if (liStart == null || liEnd == null) return Math.max(0, shiftEnd - shiftStart)
+      if (liEnd <= liStart) {
+        return overlap(shiftStart, shiftEnd, liStart, 24 * 60) + overlap(shiftStart, shiftEnd, 0, liEnd + 24 * 60)
+      }
+      return overlap(shiftStart, shiftEnd, liStart, liEnd)
+    }
+
+    if (startMinutes != null) {
+      const startMatches = pool.filter(li => isInWindow(startMinutes, li))
+      if (startMatches.length === 1) return startMatches[0]
+      if (startMatches.length > 1) return pick(startMatches)
+    }
+
+    if (startMinutes != null && endMinutes != null) {
+      const ranked = pool
+        .map(li => ({ li, overlap: overlapMinutes(li) }))
+        .sort((a, b) => (b.overlap - a.overlap) || String(a.li.code || '').localeCompare(String(b.li.code || ''), undefined, { sensitivity: 'base' }))
+      if (ranked[0]?.overlap > 0) return ranked[0].li
+    }
+
+    return pick(pool)
   }
 
   const computeCostForShiftParams = (opts: {
@@ -1755,7 +1817,9 @@ export default function CalendarClient() {
             category: category || '',
             dayType,
             isSleepover,
-            isPublicHoliday
+            isPublicHoliday,
+            startTime,
+            endTime
           })
 
           if (!targetLineItem) {
@@ -2000,7 +2064,9 @@ export default function CalendarClient() {
               category,
               dayType,
               isSleepover,
-              isPublicHoliday
+              isPublicHoliday,
+              startTime,
+              endTime
             })
 
             if (!targetLineItem) {
@@ -2308,7 +2374,9 @@ export default function CalendarClient() {
                 category,
                 dayType,
                 isSleepover,
-                isPublicHoliday
+                isPublicHoliday,
+                startTime,
+                endTime
               })
 
               if (!targetLineItem) {
@@ -2655,32 +2723,18 @@ export default function CalendarClient() {
 
       const totalCost = manualCostOverride ?? calculateCost()
       
-      // Find the correct line item code ID based on category + day type + shift type
       const dayType = getDayTypeFromYmd(newShift.shift_date)
-
-      const matchingForShift = lineItemCodes
-        .filter(li => li.category === newShift.category)
-        // Public holiday items are day-agnostic; otherwise honor weekday/sat/sun flags
-        .filter(li => (newShift.is_public_holiday ? true : lineItemMatchesDayType(li, dayType)))
-
-      const lineItem = (() => {
-        if (newShift.category === 'HIREUP') return null
-        if (newShift.is_sleepover) {
-          return matchingForShift
-            .filter(li => li.sleepover === true)
-            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
-        }
-        if (newShift.is_public_holiday) {
-          return matchingForShift
-            .filter(li => li.public_holiday === true && li.sleepover !== true)
-            .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
-        }
-        return matchingForShift
-          .filter(li => li.public_holiday !== true && li.sleepover !== true)
-          .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { sensitivity: 'base' }))[0]
-      })()
-
       const category = newShift.category as string | null | undefined
+
+      const lineItem = (category === 'HIREUP') ? null : pickLineItemForShift({
+        category: category || '',
+        dayType,
+        isSleepover: Boolean(newShift.is_sleepover),
+        isPublicHoliday: Boolean(newShift.is_public_holiday),
+        startTime: newShift.start_time,
+        endTime: newShift.end_time
+      })
+
       if (!lineItem && category && category !== 'HIREUP') {
         if (newShift.is_sleepover) setError('No sleepover line item found for the selected category/day')
         else if (newShift.is_public_holiday) setError('No public holiday line item found for the selected category/day')
