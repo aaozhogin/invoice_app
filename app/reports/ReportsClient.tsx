@@ -94,21 +94,36 @@ export default function ReportsClient() {
         
         if (codes) setLineItemCodes(codes)
 
-        // Fetch shifts
-        let query = supabase.from('shifts').select('*').eq('user_id', user.id)
-        
-        if (dateFrom) {
-          query = query.gte('shift_date', dateFrom)
-        }
-        if (dateTo) {
-          query = query.lte('shift_date', dateTo)
+        // Fetch shifts with pagination (Supabase default limit is 1,000)
+        const pageSize = 1000
+        let from = 0
+        let allShifts: Shift[] = []
+        let shiftsError = null as any
+
+        while (true) {
+          let query = supabase.from('shifts').select('*', { count: 'exact' }).eq('user_id', user.id)
+          if (dateFrom) query = query.gte('shift_date', dateFrom)
+          if (dateTo) query = query.lte('shift_date', dateTo)
+
+          const { data, error } = await query.range(from, from + pageSize - 1)
+          if (error) {
+            shiftsError = error
+            break
+          }
+          allShifts = allShifts.concat(data || [])
+          if (!data || data.length < pageSize) break
+          from += pageSize
         }
 
-        const { data: shiftsData, error: shiftsError } = await query
-        
-        console.log('📊 Reports fetch:', { dateFrom, dateTo, shiftsCount: shiftsData?.length, shiftsError, sampleShifts: shiftsData?.slice(0, 3).map(s => ({ date: s.shift_date, carerId: s.carer_id })) })
+        console.log('📊 Reports fetch:', {
+          dateFrom,
+          dateTo,
+          shiftsCount: allShifts.length,
+          shiftsError,
+          sampleShifts: allShifts.slice(0, 3).map(s => ({ date: s.shift_date, carerId: s.carer_id }))
+        })
 
-        if (shiftsData) {
+        if (allShifts.length) {
           // Fetch carers for enrichment
           const { data: carersData } = await supabase.from('carers').select('*').eq('user_id', user.id)
           const { data: lineItemsData } = await supabase.from('line_items').select('*').eq('user_id', user.id)
