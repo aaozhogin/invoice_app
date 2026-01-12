@@ -535,10 +535,18 @@ export async function POST(req: Request) {
       }
 
       const typeCandidates = filterByShiftType(dayCandidates)
-      const pool = typeCandidates.length ? typeCandidates : dayCandidates
+      let pool = typeCandidates.length ? typeCandidates : dayCandidates
 
-      // For sleepover shifts, return immediately without time-based matching
-      if (isSleepover) return sortByCode(pool)[0] || null
+      // For sleepover shifts, ensure we return a sleepover item even if current pool lacks one
+      if (isSleepover) {
+        if (!typeCandidates.length) {
+          const sleepoverFallback = dayCandidates.filter(li => li.sleepover === true)
+          if (sleepoverFallback.length) {
+            pool = sleepoverFallback
+          }
+        }
+        return sortByCode(pool)[0] || null
+      }
 
       if (startMinutes == null) return sortByCode(pool)[0] || null
 
