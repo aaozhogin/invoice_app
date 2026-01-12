@@ -585,11 +585,32 @@ export async function POST(req: Request) {
         const lineItemCode = selectedLineItem?.code ?? rel?.code ?? fallback?.code ?? ''
         const billedRate = selectedLineItem?.billed_rate ?? rel?.billed_rate ?? fallback?.billed_rate ?? null
 
-        const hours = getHours(shift.time_from, shift.time_to)
-        const amount = typeof shift.cost === 'number' ? shift.cost : (typeof billedRate === 'number' && hours > 0 ? (billedRate as number) * hours : '')
-        const unitRate = (typeof shift.cost === 'number' && hours > 0)
-          ? parseFloat((shift.cost / hours).toFixed(2))
-          : (typeof billedRate === 'number' ? parseFloat((billedRate as number).toFixed(2)) : '')
+        const hoursRaw = getHours(shift.time_from, shift.time_to)
+        const isSleepover = Boolean((shift as any).is_sleepover)
+
+        // Sleepover: qty always 1; unit price/amount from cost (or billed rate fallback)
+        const displayQty = isSleepover ? 1 : hoursRaw
+        const amount = (() => {
+          if (isSleepover) {
+            if (typeof shift.cost === 'number') return shift.cost
+            if (typeof billedRate === 'number') return billedRate
+            return ''
+          }
+          if (typeof shift.cost === 'number') return shift.cost
+          if (typeof billedRate === 'number' && hoursRaw > 0) return billedRate * hoursRaw
+          return ''
+        })()
+
+        const unitRate = (() => {
+          if (isSleepover) {
+            if (typeof shift.cost === 'number') return parseFloat(shift.cost.toFixed(2))
+            if (typeof billedRate === 'number') return parseFloat(billedRate.toFixed(2))
+            return ''
+          }
+          if (typeof shift.cost === 'number' && hoursRaw > 0) return parseFloat((shift.cost / hoursRaw).toFixed(2))
+          if (typeof billedRate === 'number') return parseFloat(billedRate.toFixed(2))
+          return ''
+        })()
         
         if (typeof amount === 'number') {
           totalAmount += amount
@@ -636,7 +657,7 @@ export async function POST(req: Request) {
         row.getCell(8).alignment = { horizontal: 'center' }
         row.getCell(8).font = { size: 9 }
 
-        row.getCell(9).value = hours > 0 ? hours : ''
+        row.getCell(9).value = displayQty > 0 ? displayQty : ''
         row.getCell(9).alignment = { horizontal: 'center' }
         row.getCell(9).font = { size: 10 }
 
