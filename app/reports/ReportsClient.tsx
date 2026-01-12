@@ -137,7 +137,7 @@ export default function ReportsClient() {
           }
           setCarerColorsMap(colorMap)
 
-          const enrichedShifts = shiftsData.map(shift => ({
+          const enrichedShifts = allShifts.map(shift => ({
             ...shift,
             carers: carersData?.find(c => c.id === shift.carer_id),
             line_items: lineItemsData?.find(l => l.id === shift.line_item_code_id)
