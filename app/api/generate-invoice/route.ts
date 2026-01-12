@@ -537,6 +537,9 @@ export async function POST(req: Request) {
       const typeCandidates = filterByShiftType(dayCandidates)
       const pool = typeCandidates.length ? typeCandidates : dayCandidates
 
+      // For sleepover shifts, return immediately without time-based matching
+      if (isSleepover) return sortByCode(pool)[0] || null
+
       if (startMinutes == null) return sortByCode(pool)[0] || null
 
       const startMatches = pool.filter(li => isTimeInWindow(startMinutes, li.time_from, li.time_to))
