@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getSupabaseClient } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 
@@ -101,6 +101,7 @@ export default function ShiftsClient() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [costBreakdown, setCostBreakdown] = useState<CostBreakdownItem[]>([]);
+  const formRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState<ShiftForm>({
     shiftDate: new Date().toISOString().split('T')[0],
@@ -114,28 +115,50 @@ export default function ShiftsClient() {
 
   // Load data from database
   useEffect(() => {
+    if (authLoading) return;
     loadShifts();
     loadCarers();
     loadClients();
     loadLineItemCodes();
-  }, []);
+  }, [authLoading, user]);
 
   const loadShifts = async () => {
     if (!user) return;
     try {
-      const { data, error } = await supabase
-        .from('shifts')
-        .select(`
-          *, 
-          carers(id, first_name, last_name, email, color), 
-          line_items(id, code, category, description, billed_rate)
-        `)
-        .eq('user_id', user.id)
-        .order('time_from', { ascending: false });
+      const pageSize = 1000;
+      let page = 0;
+      let allShifts: Shift[] = [];
 
-      if (error) {
-        console.error('Error loading shifts:', error);
-        return;
+      // Supabase caps results; page through to load all matching shifts.
+      // order + range is stable so offsets remain correct.
+      while (true) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+          .from('shifts')
+          .select(`
+            *, 
+            carers(id, first_name, last_name, email, color), 
+            line_items(id, code, category, description, billed_rate)
+          `)
+          .eq('user_id', user.id)
+          .order('time_from', { ascending: false })
+          .range(from, to);
+
+        if (error) {
+          console.error('Error loading shifts:', error);
+          break;
+        }
+
+        const pageData = data || [];
+        allShifts = allShifts.concat(pageData);
+
+        if (pageData.length < pageSize) {
+          break;
+        }
+
+        page += 1;
       }
 
       // Manually join clients data with shifts since client_id column might be missing
@@ -143,13 +166,13 @@ export default function ShiftsClient() {
       
       if (!clientsError && clientsData) {
         const clientsMap = new Map(clientsData.map(client => [client.id, client]));
-        const shiftsWithClients = (data || []).map(shift => ({
+        const shiftsWithClients = allShifts.map(shift => ({
           ...shift,
           clients: shift.client_id ? clientsMap.get(shift.client_id) : null
         }));
         setShifts(shiftsWithClients);
       } else {
-        setShifts(data || []);
+        setShifts(allShifts);
       }
     } catch (error) {
       console.error('Error loading shifts:', error);
@@ -217,6 +240,12 @@ export default function ShiftsClient() {
     setEditingId(null);
     setCostBreakdown([]);
     setError(null);
+  };
+
+  const scrollFormIntoView = () => {
+    if (formRef.current) {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   const calculateCostBreakdown = () => {
@@ -430,6 +459,7 @@ export default function ShiftsClient() {
     });
     setEditingId(shift.id);
     setFormVisible(true);
+    scrollFormIntoView();
   };
 
   const handleUpdate = async () => {
@@ -552,8 +582,9 @@ export default function ShiftsClient() {
 
   const getFilteredAndSortedShifts = () => {
     const filtered = shifts.filter((s) => {
-      const passesFrom = filterFrom ? new Date(s.shift_date) >= new Date(filterFrom) : true;
-      const passesTo = filterTo ? new Date(s.shift_date) <= new Date(filterTo) : true;
+      const shiftYmd = s.shift_date ? s.shift_date.slice(0, 10) : '';
+      const passesFrom = filterFrom ? shiftYmd >= filterFrom : true;
+      const passesTo = filterTo ? shiftYmd <= filterTo : true;
       const passesCarer = filterCarer ? String(s.carer_id) === filterCarer : true;
       const passesClient = filterClient ? String(s.clients?.id || '') === filterClient : true;
       const passesLineItem = filterLineItem ? String(s.line_items?.code || '') === filterLineItem : true;
@@ -629,6 +660,160 @@ export default function ShiftsClient() {
       {error && (
         <div className="error-message">
           {error}
+        </div>
+      )}
+
+      <div className="actions-bar">
+        <button
+          className="primary-button"
+          onClick={() => {
+            resetForm();
+            setFormVisible(true);
+            scrollFormIntoView();
+          }}
+        >
+          Add shift
+        </button>
+      </div>
+
+      {formVisible && (
+        <div className="form-card" ref={formRef}>
+          <div className="form-row compact">
+            <label>
+              Date
+              <input
+                type="date"
+                value={form.shiftDate}
+                onChange={(e) => setForm({ ...form, shiftDate: e.target.value })}
+              />
+            </label>
+            <label>
+              Time from
+              <input
+                type="time"
+                value={form.timeFrom}
+                onChange={(e) => setForm({ ...form, timeFrom: e.target.value })}
+              />
+            </label>
+            <label>
+              Time to
+              <input
+                type="time"
+                value={form.timeTo}
+                onChange={(e) => setForm({ ...form, timeTo: e.target.value })}
+              />
+            </label>
+            <label>
+              Carer
+              <select
+                value={form.carerId}
+                onChange={(e) => setForm({ ...form, carerId: e.target.value })}
+              >
+                <option value="">Select carer</option>
+                {carers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Client
+              <select
+                value={form.clientId}
+                onChange={(e) => setForm({ ...form, clientId: e.target.value })}
+              >
+                <option value="">Optional</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Category
+              <select
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              >
+                <option value="">Select category</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            {form.category === 'HIREUP' && (
+              <label>
+                HIREUP cost
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.hireupCost}
+                  onChange={(e) => setForm({ ...form, hireupCost: e.target.value })}
+                />
+              </label>
+            )}
+          </div>
+
+          {form.category !== 'HIREUP' && (
+            <div className="cost-breakdown">
+              <div style={{ fontWeight: 700, marginBottom: '6px' }}>Cost breakdown</div>
+              {costBreakdown.length === 0 && (
+                <div>No matching line items for this time and category.</div>
+              )}
+              {costBreakdown.length > 0 && (
+                <table className="breakdown-table">
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th>Code</th>
+                      <th>Rate</th>
+                      <th>Hours</th>
+                      <th>Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costBreakdown.map((item, idx) => (
+                      <tr key={`${item.code}-${idx}`}>
+                        <td>{item.description}</td>
+                        <td>{item.code}</td>
+                        <td>${item.rate.toFixed(2)}</td>
+                        <td>{item.hours.toFixed(2)}</td>
+                        <td>${item.cost.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700 }}>Total</td>
+                      <td style={{ fontWeight: 700 }}>${getTotalCost().toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {form.category === 'HIREUP' && (
+            <div className="cost-breakdown">
+              <div style={{ fontWeight: 700, marginBottom: '6px' }}>Total</div>
+              <div>${Number(form.hireupCost || 0).toFixed(2)}</div>
+            </div>
+          )}
+
+          <div className="form-actions">
+            <button
+              className="primary-button"
+              onClick={editingId ? handleUpdate : handleAdd}
+            >
+              {editingId ? 'Update shift' : 'Add shift'}
+            </button>
+            <button
+              className="secondary-btn"
+              onClick={() => {
+                resetForm();
+                setFormVisible(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -1026,6 +1211,26 @@ export default function ShiftsClient() {
         .form-actions .primary-button {
           padding: 10px 14px;
           border-radius: 6px;
+        }
+
+        .actions-bar {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 12px;
+        }
+
+        .actions-bar .primary-button {
+          padding: 10px 14px;
+          border-radius: 6px;
+        }
+
+        .form-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 16px;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+          margin-bottom: 16px;
         }
       `}</style>
     </div>
