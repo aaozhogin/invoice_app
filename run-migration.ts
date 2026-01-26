@@ -51,12 +51,9 @@ async function executeMigration() {
       const statement = statements[i] + ';'
 
       try {
-        // Execute statement via RPC if available, otherwise try direct query
+        // Execute statement via RPC if available
         const { error } = await supabase.rpc('exec', {
           sql_query: statement,
-        }).catch(() => {
-          // Fallback: try the statement directly (most statements will work this way)
-          return { error: null }
         })
 
         successCount++
