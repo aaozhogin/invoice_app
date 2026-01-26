@@ -7,7 +7,8 @@ import { usePathname } from 'next/navigation'
 
 export default function SidebarClient() {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const { user, signOut } = useAuth()
+  const [administrationOpen, setAdministrationOpen] = useState(false)
+  const { user, userProfile, isSuperadmin, signOut } = useAuth()
   const pathname = usePathname()
 
   // Hide sidebar on auth pages
@@ -54,6 +55,27 @@ export default function SidebarClient() {
           <Link href="/line-item-codes" className="nav-link nav-sub" style={{textAlign: 'left'}}>
             Line Item Codes
           </Link>
+        </>
+      )}
+
+      {console.log('Debug - userProfile:', userProfile, 'role:', userProfile?.role, 'isSuperadmin:', isSuperadmin())}
+      
+      {isSuperadmin() && (
+        <>
+          <div className="nav-divider"></div>
+          <button 
+            className="nav-toggle" 
+            onClick={() => setAdministrationOpen(!administrationOpen)}
+          >
+            Administration {administrationOpen ? '▼' : '▶'}
+          </button>
+          {administrationOpen && (
+            <>
+              <Link href="/admin/users" className="nav-link nav-sub" style={{textAlign: 'left'}}>
+                User Management
+              </Link>
+            </>
+          )}
         </>
       )}
 
@@ -164,7 +186,7 @@ export default function SidebarClient() {
           }
         }
       `}</style>
-      
+
       <div style={{
         marginTop: 'auto',
         padding: '16px',
@@ -175,6 +197,19 @@ export default function SidebarClient() {
       }}>
         {user && (
           <>
+            {userProfile && (
+              <div style={{
+                fontSize: '12px',
+                padding: '8px 12px',
+                background: isSuperadmin() ? '#fef3c7' : '#dbeafe',
+                color: isSuperadmin() ? '#92400e' : '#1e40af',
+                borderRadius: '6px',
+                textAlign: 'center',
+                border: '1px solid var(--border)'
+              }}>
+                {userProfile.role}
+              </div>
+            )}
             <div style={{
               fontSize: '14px',
               color: 'var(--muted)',
