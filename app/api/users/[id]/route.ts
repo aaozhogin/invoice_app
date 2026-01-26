@@ -12,18 +12,12 @@ import {
   logAudit,
 } from '@/lib/server-auth'
 
-interface Params {
-  params: {
-    id: string
-  }
-}
-
 /**
  * GET /api/users/[id]
  * Get a specific user
  * Requires: authenticated user who is superadmin, admin, or same user
  */
-export async function GET(request: NextRequest, { params }: Params) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { authorized, user, response } = await authorizeRequest(request)
 
   if (!authorized || !user) {
@@ -32,7 +26,8 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   try {
     const supabase = createAuthorizedSupabaseClient(request)
-    const userId = params.id
+    const { id } = await params
+    const userId = id
 
     // Users can view themselves, admins can view users in their org
     const { data: targetUser } = await supabase
@@ -103,7 +98,7 @@ export async function GET(request: NextRequest, { params }: Params) {
  * Update a user
  * Requires: superadmin, administrator, or the user themselves (limited fields)
  */
-export async function PUT(request: NextRequest, { params }: Params) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { authorized, user, response } = await authorizeRequest(request)
 
   if (!authorized || !user) {
@@ -112,7 +107,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   try {
     const supabase = createAuthorizedSupabaseClient(request)
-    const userId = params.id
+    const { id } = await params
+    const userId = id
     const body = await request.json()
 
     // Fetch target user
@@ -239,7 +235,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
  * Delete a user
  * Requires: superadmin only
  */
-export async function DELETE(request: NextRequest, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { authorized, user, response } = await authorizeWithRole(request, 'superadmin')
 
   if (!authorized || !user) {
@@ -248,7 +244,8 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
   try {
     const supabase = createAuthorizedSupabaseClient(request)
-    const userId = params.id
+    const { id } = await params
+    const userId = id
 
     // Prevent deleting yourself
     if (user.id === userId) {
