@@ -245,8 +245,10 @@ export function createAuthorizedSupabaseClient(request: NextRequest) {
         persistSession: false,
         autoRefreshToken: false,
       },
-      headers: {
-        Authorization: `Bearer ${token || ''}`,
+      global: {
+        headers: {
+          Authorization: `Bearer ${token || ''}`,
+        },
       },
     }
   )
