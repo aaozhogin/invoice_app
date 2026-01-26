@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/app/lib/AuthContext'
 import { usePathname } from 'next/navigation'
 
@@ -10,6 +10,11 @@ export default function SidebarClient() {
   const [administrationOpen, setAdministrationOpen] = useState(false)
   const { user, userProfile, isSuperadmin, signOut } = useAuth()
   const pathname = usePathname()
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Debug - userProfile:', userProfile, 'role:', userProfile?.role, 'isSuperadmin:', isSuperadmin())
+  }, [userProfile, isSuperadmin])
 
   // Hide sidebar on auth pages
   const isAuthPage = pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password'
@@ -57,8 +62,6 @@ export default function SidebarClient() {
           </Link>
         </>
       )}
-
-      {console.log('Debug - userProfile:', userProfile, 'role:', userProfile?.role, 'isSuperadmin:', isSuperadmin())}
       
       {isSuperadmin() && (
         <>
