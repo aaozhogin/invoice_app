@@ -7,11 +7,11 @@ const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = loadEnv()
 
 async function setupSuperadmin() {
   try {
-    if (!SUPABASE_SERVICE_KEY) {
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY not set')
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
@@ -41,8 +41,12 @@ async function setupSuperadmin() {
         throw new Error(`Failed to create org: ${createError.message}`)
       }
 
+      if (!newOrg) {
+        throw new Error('Failed to create organization')
+      }
+
       org = newOrg
-      console.log(`✓ Created internal organization: ${org.id}\n`)
+      console.log(`✓ Created internal organization: ${newOrg.id}\n`)
     } else {
       console.log(`✓ Internal organization exists: ${org.id}\n`)
     }
@@ -81,10 +85,18 @@ async function setupSuperadmin() {
         throw new Error(`Failed to create role: ${roleError.message}`)
       }
 
+      if (!newRole) {
+        throw new Error('Failed to create role')
+      }
+
       role = newRole
-      console.log(`✓ Created superadmin role: ${role.id}\n`)
+      console.log(`✓ Created superadmin role: ${newRole.id}\n`)
     } else {
       console.log(`✓ Superadmin role exists: ${role.id}\n`)
+    }
+
+    if (!org || !role) {
+      throw new Error('Organization or role not properly initialized')
     }
 
     // Link user to users table
