@@ -91,7 +91,7 @@ export const roleHasAllPermissions = (
 /**
  * Get all permissions for a role
  */
-export const getRolePermissions = (role: UserRole): Record<string, string[]> => {
+export const getRolePermissions = (role: UserRole): Record<string, readonly string[]> => {
   return ROLE_PERMISSIONS[role] || {}
 }
 
