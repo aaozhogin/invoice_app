@@ -6,10 +6,10 @@ interface OMLLogoProps {
   className?: string;
 }
 
-export function OMLLogo(props?: any) {
-  const { size = "md", showText = false, className = "" } = props || {};
+export function OMLLogo(props: OMLLogoProps = {}) {
+  const { size = "md", showText = false, className = "" } = props;
   
-  const sizeClasses = {
+  const sizeClasses: Record<"sm" | "md" | "lg", string> = {
     sm: "h-8",
     md: "h-10",
     lg: "h-14",
