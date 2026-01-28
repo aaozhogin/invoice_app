@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/app/lib/AuthContext'
 import getSupabaseClient from '@/app/lib/supabaseClient'
@@ -28,26 +28,8 @@ export default function InvoicesClient() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (authLoading) return
-    if (!user) {
-      setInvoices([])
-      setIsLoading(false)
-      return
-    }
-    fetchInvoices()
-  }, [user, authLoading])
-
-  useEffect(() => {
-    // Listen for invoice generation events from the calendar
-    const handleInvoiceGenerated = () => {
-      fetchInvoices()
-    }
-    window.addEventListener('invoiceGenerated', handleInvoiceGenerated)
-    return () => window.removeEventListener('invoiceGenerated', handleInvoiceGenerated)
-  }, [])
-
-  const fetchInvoices = async () => {
+  // BUGFIX: Use useCallback to create stable function reference for event listeners
+  const fetchInvoices = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
@@ -74,7 +56,27 @@ export default function InvoicesClient() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, []) // Empty deps since we use getSupabaseClient which handles auth internally
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) {
+      setInvoices([])
+      setIsLoading(false)
+      return
+    }
+    fetchInvoices()
+  }, [user, authLoading, fetchInvoices])
+
+  // BUGFIX: Properly handle event listener with stable function reference
+  useEffect(() => {
+    // Listen for invoice generation events from the calendar
+    const handleInvoiceGenerated = () => {
+      fetchInvoices()
+    }
+    window.addEventListener('invoiceGenerated', handleInvoiceGenerated)
+    return () => window.removeEventListener('invoiceGenerated', handleInvoiceGenerated)
+  }, [fetchInvoices])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this invoice record?')) return

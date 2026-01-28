@@ -360,15 +360,53 @@ export default function ShiftsClient() {
   };
 
   const handleAdd = async () => {
+    // BUGFIX: Comprehensive input validation
     if (!form.carerId || !form.category) {
       setError('Please select carer and category');
       return;
     }
 
+    // Validate shift date
+    if (!form.shiftDate) {
+      setError('Please select a shift date');
+      return;
+    }
+
+    const shiftDate = new Date(form.shiftDate);
+    const now = new Date();
+    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    
+    if (isNaN(shiftDate.getTime())) {
+      setError('Invalid shift date');
+      return;
+    }
+
+    if (shiftDate > oneYearFromNow) {
+      setError('Shift date cannot be more than 1 year in the future');
+      return;
+    }
+
+    // Validate times
+    if (!form.timeFrom || !form.timeTo) {
+      setError('Please enter both start and end times');
+      return;
+    }
+
+    const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timePattern.test(form.timeFrom) || !timePattern.test(form.timeTo)) {
+      setError('Invalid time format. Use HH:MM format');
+      return;
+    }
+
+    // Validate HIREUP cost
     if (form.category === 'HIREUP') {
       const costNum = Number(form.hireupCost);
       if (!Number.isFinite(costNum) || costNum <= 0) {
-        setError('Enter a valid cost for HIREUP');
+        setError('Enter a valid positive cost for HIREUP');
+        return;
+      }
+      if (costNum > 10000) {
+        setError('Cost seems unusually high. Please verify the amount');
         return;
       }
     }
@@ -463,15 +501,53 @@ export default function ShiftsClient() {
   };
 
   const handleUpdate = async () => {
+    // BUGFIX: Comprehensive input validation
     if (!editingId || !form.carerId || !form.category) {
       setError('Please select carer and category');
       return;
     }
 
+    // Validate shift date
+    if (!form.shiftDate) {
+      setError('Please select a shift date');
+      return;
+    }
+
+    const shiftDate = new Date(form.shiftDate);
+    const now = new Date();
+    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+    
+    if (isNaN(shiftDate.getTime())) {
+      setError('Invalid shift date');
+      return;
+    }
+
+    if (shiftDate > oneYearFromNow) {
+      setError('Shift date cannot be more than 1 year in the future');
+      return;
+    }
+
+    // Validate times
+    if (!form.timeFrom || !form.timeTo) {
+      setError('Please enter both start and end times');
+      return;
+    }
+
+    const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timePattern.test(form.timeFrom) || !timePattern.test(form.timeTo)) {
+      setError('Invalid time format. Use HH:MM format');
+      return;
+    }
+
+    // Validate HIREUP cost
     if (form.category === 'HIREUP') {
       const costNum = Number(form.hireupCost);
       if (!Number.isFinite(costNum) || costNum <= 0) {
-        setError('Enter a valid cost for HIREUP');
+        setError('Enter a valid positive cost for HIREUP');
+        return;
+      }
+      if (costNum > 10000) {
+        setError('Cost seems unusually high. Please verify the amount');
         return;
       }
     }

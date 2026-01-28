@@ -92,12 +92,12 @@ export async function POST(req: Request) {
   try {
     const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-    // Get authenticated user if userId provided, otherwise proceed without auth (for backward compatibility)
-    let userId: string | undefined = body.userId
-    if (!userId) {
-      const { data: authData } = await supabase.auth.getUser()
-      userId = authData?.user?.id
+    // SECURITY: Always get user ID from authenticated session, never trust client input
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const userId = user.id
 
     let carersQuery = supabase
       .from('carers')

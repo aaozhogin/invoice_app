@@ -15,10 +15,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const { id } = await params
     const supabase = getServerSupabase()
+    
+    // SECURITY: Get authenticated user to ensure they can only access their own calendars
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const { data, error } = await supabase
       .from('saved_calendars')
       .select('*')
       .eq('id', id)
+      .eq('user_id', user.id) // Ensure user can only access their own data
       .single()
 
     if (error) throw error
@@ -35,10 +43,18 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params
     const supabase = getServerSupabase()
+    
+    // SECURITY: Get authenticated user to ensure they can only delete their own calendars
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
     const { error } = await supabase
       .from('saved_calendars')
       .delete()
       .eq('id', id)
+      .eq('user_id', user.id) // Ensure user can only delete their own data
 
     if (error) throw new Error(error.message || 'Unknown Supabase error')
 

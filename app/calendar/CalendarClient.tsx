@@ -210,6 +210,7 @@ export default function CalendarClient() {
   const [showManualCostInput, setShowManualCostInput] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
+  const isMountedRef = useRef(true) // Track if component is mounted to prevent race conditions
   const { user, loading: authLoading } = useAuth()
 
   // Time conversion utilities (defined early for use in effects)
@@ -224,6 +225,14 @@ export default function CalendarClient() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
 
+  // BUGFIX: Track mounted state to prevent race conditions and memory leaks
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   useEffect(() => {
     if (authLoading) return
     if (!user) {
@@ -235,46 +244,54 @@ export default function CalendarClient() {
       setRangeShifts([])
       return
     }
+    
     fetchData()
   }, [authLoading, user, currentDate, dateFrom, dateTo, selectedClientId, viewMode])
+
+  // BUGFIX: Use refs to track drag state to avoid memory leaks in event listeners
+  const dragStateRef = useRef(dragState)
+  useEffect(() => {
+    dragStateRef.current = dragState
+  }, [dragState])
 
   // Effect for drag event listeners
   useEffect(() => {
     if (!dragState.isDragging && !dragState.isResizing) return
     
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaY = e.clientY - dragState.startY
+      const currentDragState = dragStateRef.current
+      const deltaY = e.clientY - currentDragState.startY
       const deltaMinutes = Math.round((deltaY / 60) * 15) * 15 // Snap to 15-minute intervals
       
-      if (dragState.dragType === 'move') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      if (currentDragState.dragType === 'move') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         const duration = originalEndMinutes - originalStartMinutes
         
         const newStartMinutes = Math.max(0, Math.min(24 * 60 - duration, originalStartMinutes + deltaMinutes))
         
-        const shiftElement = document.querySelector(`[data-shift-id="${dragState.shiftId}"]`) as HTMLElement
+        const shiftElement = document.querySelector(`[data-shift-id="${currentDragState.shiftId}"]`) as HTMLElement
         if (shiftElement) {
           shiftElement.style.top = `${newStartMinutes}px`
         }
-      } else if (dragState.dragType === 'resize-top') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      } else if (currentDragState.dragType === 'resize-top') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         
         const newStartMinutes = Math.max(0, Math.min(originalEndMinutes - 15, originalStartMinutes + deltaMinutes))
         
-        const shiftElement = document.querySelector(`[data-shift-id="${dragState.shiftId}"]`) as HTMLElement
+        const shiftElement = document.querySelector(`[data-shift-id="${currentDragState.shiftId}"]`) as HTMLElement
         if (shiftElement) {
           shiftElement.style.top = `${newStartMinutes}px`
           shiftElement.style.height = `${originalEndMinutes - newStartMinutes}px`
         }
-      } else if (dragState.dragType === 'resize-bottom') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      } else if (currentDragState.dragType === 'resize-bottom') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         
         const newEndMinutes = Math.max(originalStartMinutes + 15, Math.min(24 * 60, originalEndMinutes + deltaMinutes))
         
-        const shiftElement = document.querySelector(`[data-shift-id="${dragState.shiftId}"]`) as HTMLElement
+        const shiftElement = document.querySelector(`[data-shift-id="${currentDragState.shiftId}"]`) as HTMLElement
         if (shiftElement) {
           shiftElement.style.height = `${newEndMinutes - originalStartMinutes}px`
         }
@@ -282,15 +299,16 @@ export default function CalendarClient() {
     }
     
     const handleMouseUp = async (e: MouseEvent) => {
-      const deltaY = e.clientY - dragState.startY
+      const currentDragState = dragStateRef.current
+      const deltaY = e.clientY - currentDragState.startY
       const deltaMinutes = Math.round((deltaY / 60) * 15) * 15
       
-      let newStartTime = dragState.startTime
-      let newEndTime = dragState.endTime
+      let newStartTime = currentDragState.startTime
+      let newEndTime = currentDragState.endTime
       
-      if (dragState.dragType === 'move') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      if (currentDragState.dragType === 'move') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         const duration = originalEndMinutes - originalStartMinutes
         
         const newStartMinutes = Math.max(0, Math.min(24 * 60 - duration, originalStartMinutes + deltaMinutes))
@@ -298,23 +316,23 @@ export default function CalendarClient() {
         
         newStartTime = minutesToTimeString(newStartMinutes)
         newEndTime = minutesToTimeString(newEndMinutes)
-      } else if (dragState.dragType === 'resize-top') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      } else if (currentDragState.dragType === 'resize-top') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         
         const newStartMinutes = Math.max(0, Math.min(originalEndMinutes - 15, originalStartMinutes + deltaMinutes))
         newStartTime = minutesToTimeString(newStartMinutes)
-      } else if (dragState.dragType === 'resize-bottom') {
-        const originalStartMinutes = timeStringToMinutes(dragState.startTime)
-        const originalEndMinutes = timeStringToMinutes(dragState.endTime)
+      } else if (currentDragState.dragType === 'resize-bottom') {
+        const originalStartMinutes = timeStringToMinutes(currentDragState.startTime)
+        const originalEndMinutes = timeStringToMinutes(currentDragState.endTime)
         
         const newEndMinutes = Math.max(originalStartMinutes + 15, Math.min(24 * 60, originalEndMinutes + deltaMinutes))
         newEndTime = minutesToTimeString(newEndMinutes)
       }
       
       // Only update if times have actually changed
-      if (newStartTime !== dragState.startTime || newEndTime !== dragState.endTime) {
-        await updateShiftTimes(dragState.shiftId!, newStartTime, newEndTime)
+      if (newStartTime !== currentDragState.startTime || newEndTime !== currentDragState.endTime) {
+        await updateShiftTimes(currentDragState.shiftId!, newStartTime, newEndTime)
       }
       
       // Reset drag state
@@ -337,7 +355,7 @@ export default function CalendarClient() {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [dragState])
+  }, [dragState.isDragging, dragState.isResizing])
 
   const fetchData = async () => {
     try {
@@ -445,6 +463,12 @@ export default function CalendarClient() {
         clients: clientsRes.data?.length,
         shifts: allShifts.length
       })
+
+      // BUGFIX: Only update state if component is still mounted (prevents race conditions)
+      if (!isMountedRef.current) {
+        console.log('⚠️ Component unmounted, skipping state update')
+        return
+      }
 
       setCarers(carersRes.data || [])
       setLineItemCodes(lineItemCodesRes.data || [])

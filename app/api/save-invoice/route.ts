@@ -33,10 +33,16 @@ export async function POST(req: Request) {
     // Use any to bypass type checking issues with invoices table
     const supabase: any = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+    // SECURITY: Always get user ID from authenticated session, never trust client input
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { data, error } = await supabase
       .from('invoices')
       .insert({
-        user_id: body.userId,
+        user_id: user.id,
         invoice_number: body.invoiceNumber,
         carer_id: body.carerId,
         client_id: body.clientId,
