@@ -21,7 +21,7 @@ interface InvoiceRecord {
 }
 
 export default function InvoicesClient() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, session, loading: authLoading } = useAuth()
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,7 +83,11 @@ export default function InvoicesClient() {
 
     try {
       setDeletingId(id)
-      const res = await fetch(`/api/delete-invoice?id=${id}`, { method: 'DELETE' })
+      const headers: HeadersInit = {}
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      const res = await fetch(`/api/delete-invoice?id=${id}`, { method: 'DELETE', headers })
       if (!res.ok) throw new Error('Failed to delete invoice')
       setInvoices(invoices.filter(inv => inv.id !== id))
     } catch (err) {
@@ -96,7 +100,11 @@ export default function InvoicesClient() {
   const handleDownload = async (invoice: InvoiceRecord) => {
     try {
       setDownloadingId(invoice.id)
-      const res = await fetch(`/api/download-invoice?number=${encodeURIComponent(invoice.invoice_number)}&date=${invoice.invoice_date}`)
+      const headers: HeadersInit = {}
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`
+      }
+      const res = await fetch(`/api/download-invoice?number=${encodeURIComponent(invoice.invoice_number)}&date=${invoice.invoice_date}`, { headers })
       if (!res.ok) throw new Error('Failed to download invoice')
       
       const json = await res.json()

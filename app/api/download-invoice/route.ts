@@ -10,6 +10,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Supabase environment variables are not set.' }, { status: 500 })
   }
 
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const token = authHeader.slice(7)
+
   const { searchParams } = new URL(req.url)
   const invoiceNumber = searchParams.get('number')
   const invoiceDate = searchParams.get('date')
@@ -19,7 +26,22 @@ export async function GET(req: Request) {
   }
 
   try {
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    })
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     // Find the invoice record
     const { data: invoices, error: invoiceError } = await supabase
@@ -42,7 +64,10 @@ export async function GET(req: Request) {
     
     const generateRes = await fetch(`${baseUrl}/api/generate-invoice`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
       body: JSON.stringify({
         invoiceDate: invoice.invoice_date,
         invoiceNumber: invoice.invoice_number,

@@ -10,6 +10,13 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: 'Supabase environment variables are not set.' }, { status: 500 })
   }
 
+  const authHeader = req.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const token = authHeader.slice(7)
+
   const { searchParams } = new URL(req.url)
   const invoiceId = searchParams.get('id')
 
@@ -18,10 +25,20 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    })
 
     // Get authenticated user first
-    const { data: authData, error: authError } = await supabase.auth.getUser()
+    const { data: authData, error: authError } = await supabase.auth.getUser(token)
     if (authError || !authData?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

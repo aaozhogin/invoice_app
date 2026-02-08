@@ -211,7 +211,7 @@ export default function CalendarClient() {
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const isMountedRef = useRef(true) // Track if component is mounted to prevent race conditions
-  const { user, loading: authLoading } = useAuth()
+  const { user, session, loading: authLoading } = useAuth()
 
   // Time conversion utilities (defined early for use in effects)
   const timeStringToMinutes = (timeStr: string) => {
@@ -3314,9 +3314,13 @@ export default function CalendarClient() {
           setInvoiceError(null)
           setInvoiceSuccess(null)
 
+          const authToken = session?.access_token
           const res = await fetch('/api/generate-invoice', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+            },
             body: JSON.stringify(payload)
           })
 

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import ExcelJS from 'exceljs'
 import path from 'path'
@@ -57,7 +57,7 @@ function findHeaderRow(sheet: ExcelJS.Worksheet, headers: string[]): number | nu
   return null
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return NextResponse.json({ error: 'Supabase environment variables are not set.' }, { status: 500 })
   }
@@ -90,10 +90,26 @@ export async function POST(req: Request) {
   }
 
   try {
-    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY)
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const token = authHeader.slice(7)
+    const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    })
 
     // SECURITY: Always get user ID from authenticated session, never trust client input
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
