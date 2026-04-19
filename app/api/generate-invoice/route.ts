@@ -411,6 +411,22 @@ export async function POST(req: NextRequest) {
       return Number.isNaN(dateObj.getTime()) ? d : dateObj
     }
 
+    const parseYmdToLocalDate = (ymd: string) => {
+      const parts = ymd.split('-').map(Number)
+      if (parts.length !== 3 || parts.some(part => Number.isNaN(part))) {
+        return new Date(ymd)
+      }
+      const [year, month, day] = parts
+      return new Date(year, month - 1, day)
+    }
+
+    const formatLocalYmd = (date: Date) => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
     const parseTimeToDate = (t: string) => {
       if (!t) return ''
       // Parse the UTC timestamp from database
@@ -431,8 +447,8 @@ export async function POST(req: NextRequest) {
     }
 
     const getDayTypeFromYmd = (ymd: string): 'weekday' | 'saturday' | 'sunday' => {
-      const d = new Date(`${ymd}T00:00:00`)
-      const day = d.getUTCDay()
+      const d = parseYmdToLocalDate(ymd)
+      const day = d.getDay()
       if (day === 0) return 'sunday'
       if (day === 6) return 'saturday'
       return 'weekday'
@@ -495,6 +511,181 @@ export async function POST(req: NextRequest) {
       }
 
       return overlap(shiftStart, shiftEnd, liStart, liEnd)
+    }
+
+    const formatMinutesAsLabel = (minutes: number, dayOffset: number) => {
+      const normalized = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60)
+      const hh = Math.floor(normalized / 60)
+      const mm = normalized % 60
+      const hour12 = hh % 12 || 12
+      const ampm = hh < 12 ? 'AM' : 'PM'
+      return `${String(hour12).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${ampm}${dayOffset > 0 ? ` (+${dayOffset}d)` : ''}`
+    }
+
+    type InvoiceSegmentRow = {
+      rowDate: Date
+      from: string
+      to: string
+      description: string
+      code: string
+      qty: number
+      rate: number | ''
+      amount: number | ''
+    }
+
+    const buildInvoiceRowsForShift = (shift: any): InvoiceSegmentRow[] => {
+      const category = shift.category ?? shift.line_items?.category ?? null
+      const isSleepover = Boolean(shift.is_sleepover)
+      const isPublicHoliday = Boolean(shift.is_public_holiday)
+      const lineItems = Array.from(lineItemMap.values())
+      const dateBase = parseYmdToLocalDate(shift.shift_date)
+      const localStart = toLocalMinutesFromIso(shift.time_from)
+      const rawLocalEnd = toLocalMinutesFromIso(shift.time_to)
+      if (localStart == null || rawLocalEnd == null) {
+        return []
+      }
+      const localEnd = rawLocalEnd <= localStart ? rawLocalEnd + 24 * 60 : rawLocalEnd
+
+      const rows: InvoiceSegmentRow[] = []
+
+      if (category === 'HIREUP') {
+        const rate = typeof shift.cost === 'number' ? shift.cost : 0
+        const endLabel = rawLocalEnd <= localStart ? `${formatMinutesAsLabel(rawLocalEnd, 1)}` : formatMinutesAsLabel(rawLocalEnd, 0)
+        rows.push({
+          rowDate: dateBase,
+          from: formatMinutesAsLabel(localStart, 0),
+          to: endLabel,
+          description: 'HIREUP Shift',
+          code: 'HIREUP',
+          qty: 1,
+          rate,
+          amount: rate
+        })
+        return rows
+      }
+
+      if (isSleepover) {
+        const dayType = getDayTypeFromYmd(shift.shift_date)
+        const baseMatchingLineItems = lineItems.filter(li => {
+          if (li.category !== category) return false
+          return isPublicHoliday ? true : lineItemMatchesDayType(li, dayType)
+        })
+
+        const sleepoverPool = baseMatchingLineItems.filter(li => li.sleepover === true)
+        const chosen = isPublicHoliday
+          ? sleepoverPool.find(li => li.public_holiday === true) || sleepoverPool.sort((a, b) => String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { sensitivity: 'base' }))[0]
+          : sleepoverPool.sort((a, b) => String(a.code ?? '').localeCompare(String(b.code ?? ''), undefined, { sensitivity: 'base' }))[0]
+
+        if (!chosen) return []
+        const rate = typeof chosen.billed_rate === 'number' ? chosen.billed_rate : 0
+        const endLabel = rawLocalEnd <= localStart ? `${formatMinutesAsLabel(rawLocalEnd, 1)}` : formatMinutesAsLabel(rawLocalEnd, 0)
+        rows.push({
+          rowDate: dateBase,
+          from: formatMinutesAsLabel(localStart, 0),
+          to: endLabel,
+          description: chosen.description ?? '',
+          code: chosen.code ?? '',
+          qty: 1,
+          rate,
+          amount: rate
+        })
+        return rows
+      }
+
+      const segments: Array<{ dayOffset: number; start: number; end: number }> = []
+      let cursor = localStart
+      while (cursor < localEnd) {
+        const dayOffset = Math.floor(cursor / (24 * 60))
+        const dayEnd = (dayOffset + 1) * 24 * 60
+        const segmentEnd = Math.min(localEnd, dayEnd)
+        segments.push({
+          dayOffset,
+          start: cursor - dayOffset * 24 * 60,
+          end: segmentEnd - dayOffset * 24 * 60
+        })
+        cursor = segmentEnd
+      }
+
+      for (const segment of segments) {
+        const rowDate = new Date(dateBase)
+        rowDate.setDate(rowDate.getDate() + segment.dayOffset)
+        const dayType = getDayTypeFromYmd(formatLocalYmd(rowDate))
+
+        const baseMatchingLineItems = lineItems.filter(li => {
+          if (li.category !== category) return false
+          return isPublicHoliday ? true : lineItemMatchesDayType(li, dayType)
+        })
+
+        const matchingLineItems = baseMatchingLineItems.filter(li => {
+          if (isPublicHoliday) return li.public_holiday === true && li.sleepover !== true
+          return li.public_holiday !== true && li.sleepover !== true
+        })
+
+        for (const li of matchingLineItems) {
+          const addRow = (startMinutes: number, endMinutes: number) => {
+            const overlapStart = Math.max(segment.start, startMinutes)
+            const overlapEnd = Math.min(segment.end, endMinutes)
+            const minutes = Math.max(0, overlapEnd - overlapStart)
+            if (minutes <= 0) return
+            const hours = Math.round((minutes / 60) * 100) / 100
+            const rate = typeof li.billed_rate === 'number' ? li.billed_rate : 0
+            rows.push({
+              rowDate,
+              from: formatMinutesAsLabel(overlapStart, segment.dayOffset),
+              to: formatMinutesAsLabel(overlapEnd, segment.dayOffset),
+              description: li.description ?? '',
+              code: li.code ?? '',
+              qty: hours,
+              rate,
+              amount: Math.round(hours * rate * 100) / 100
+            })
+          }
+
+          const hasWindow = !!li.time_from && !!li.time_to
+          if (!hasWindow) {
+            addRow(0, 24 * 60)
+            continue
+          }
+
+          const liStart = parseHHMMToMinutes(li.time_from)
+          const liEnd = parseHHMMToMinutes(li.time_to)
+          if (liStart == null || liEnd == null) {
+            addRow(0, 24 * 60)
+            continue
+          }
+
+          if (liEnd <= liStart) {
+            addRow(liStart, 24 * 60)
+            addRow(0, liEnd)
+          } else {
+            addRow(liStart, liEnd)
+          }
+        }
+      }
+
+      if (rows.length > 0) {
+        return rows
+      }
+
+      const fallbackItem = pickLineItemForShift(shift)
+      const fallbackDescription = fallbackItem?.description ?? shift.line_items?.description ?? ''
+      const fallbackCode = fallbackItem?.code ?? shift.line_items?.code ?? ''
+      const fallbackRate = typeof fallbackItem?.billed_rate === 'number' ? fallbackItem.billed_rate : (typeof shift.line_items?.billed_rate === 'number' ? shift.line_items.billed_rate : null)
+      const shiftHours = Math.round(((localEnd - localStart) / 60) * 100) / 100
+      const amount = typeof shift.cost === 'number' ? shift.cost : (fallbackRate != null ? Math.round(shiftHours * fallbackRate * 100) / 100 : '')
+      const rate = typeof shift.cost === 'number' && shiftHours > 0 ? parseFloat((shift.cost / shiftHours).toFixed(2)) : (typeof fallbackRate === 'number' ? fallbackRate : '')
+      rows.push({
+        rowDate: dateBase,
+        from: formatMinutesAsLabel(localStart, 0),
+        to: formatMinutesAsLabel(rawLocalEnd <= localStart ? rawLocalEnd : rawLocalEnd, rawLocalEnd <= localStart ? 1 : 0),
+        description: fallbackDescription,
+        code: fallbackCode,
+        qty: shiftHours,
+        rate,
+        amount
+      })
+
+      return rows
     }
 
     const pickLineItemForShift = (shift: any): LineItemMeta | null => {
@@ -561,6 +752,13 @@ export async function POST(req: NextRequest) {
             pool = sleepoverFallback
           }
         }
+        // For public holiday sleepovers, prioritize public holiday sleepover items
+        if (isPublicHoliday) {
+          const publicHolidaySleepovers = pool.filter(li => li.public_holiday === true)
+          if (publicHolidaySleepovers.length) {
+            return sortByCode(publicHolidaySleepovers)[0] || null
+          }
+        }
         return sortByCode(pool)[0] || null
       }
 
@@ -595,7 +793,9 @@ export async function POST(req: NextRequest) {
       row.commit()
     }
 
-    if (sortedShifts.length === 0) {
+    const invoiceRows = sortedShifts.flatMap((shift) => buildInvoiceRowsForShift(shift))
+
+    if (invoiceRows.length === 0) {
       const row = sheet.getRow(dataStartRow)
       row.getCell(3).value = 'No shifts found'
       row.getCell(4).value = `${dateFrom} - ${dateTo}`
@@ -603,103 +803,58 @@ export async function POST(req: NextRequest) {
     } else {
       let totalAmount = 0
 
-      sortedShifts.forEach((shift, idx) => {
-        // Prefer time-aware selection; fall back to stored relations
-        const rel = shift.line_items
-        const fallback = shift.line_item_code_id != null ? lineItemMap.get(String(shift.line_item_code_id)) || null : null
-        const selectedLineItem = pickLineItemForShift(shift)
-        const lineItemDesc = selectedLineItem?.description ?? rel?.description ?? fallback?.description ?? ''
-        const lineItemCode = selectedLineItem?.code ?? rel?.code ?? fallback?.code ?? ''
-        const billedRate = selectedLineItem?.billed_rate ?? rel?.billed_rate ?? fallback?.billed_rate ?? null
-
-        const hoursRaw = getHours(shift.time_from, shift.time_to)
-        const isSleepover = Boolean((shift as any).is_sleepover)
-
-        // Sleepover: qty always 1; unit price/amount from cost (or billed rate fallback)
-        const displayQty = isSleepover ? 1 : hoursRaw
-        const amount = (() => {
-          if (isSleepover) {
-            if (typeof shift.cost === 'number') return shift.cost
-            if (typeof billedRate === 'number') return billedRate
-            return ''
-          }
-          if (typeof shift.cost === 'number') return shift.cost
-          if (typeof billedRate === 'number' && hoursRaw > 0) return billedRate * hoursRaw
-          return ''
-        })()
-
-        const unitRate = (() => {
-          if (isSleepover) {
-            if (typeof shift.cost === 'number') return parseFloat(shift.cost.toFixed(2))
-            if (typeof billedRate === 'number') return parseFloat(billedRate.toFixed(2))
-            return ''
-          }
-          if (typeof shift.cost === 'number' && hoursRaw > 0) return parseFloat((shift.cost / hoursRaw).toFixed(2))
-          if (typeof billedRate === 'number') return parseFloat(billedRate.toFixed(2))
-          return ''
-        })()
-        
-        if (typeof amount === 'number') {
-          totalAmount += amount
-        }
-
+      invoiceRows.forEach((rowData, idx) => {
         const row = sheet.getRow(dataStartRow + idx)
         const rowNumber = dataStartRow + idx
-        
-        // Merge cells F-G (Description) and J-K (Unit Price) for this row
+
         const fgRange = `F${rowNumber}:G${rowNumber}`
         const jkRange = `J${rowNumber}:K${rowNumber}`
-        
-        try { sheet.mergeCells(fgRange) } catch (e) { /* already merged */ }
-        try { sheet.mergeCells(jkRange) } catch (e) { /* already merged */ }
-        
-        // Column B: DOW formula
-        row.getCell(2).value = { formula: `TEXT(C${rowNumber},"ddd")` }
+        try { sheet.mergeCells(fgRange) } catch (e) { }
+        try { sheet.mergeCells(jkRange) } catch (e) { }
+
+        const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        row.getCell(2).value = weekdayNames[rowData.rowDate.getDay()]
         row.getCell(2).alignment = { horizontal: 'center' }
         row.getCell(2).font = { size: 10, bold: true }
 
-        const dateValue = formatDateValue(shift.shift_date)
-        row.getCell(3).value = dateValue
-        row.getCell(3).numFmt = 'dd/mm/yyyy'
+        row.getCell(3).value = formatDateDDMMYYYY(formatLocalYmd(rowData.rowDate))
         row.getCell(3).alignment = { horizontal: 'center' }
         row.getCell(3).font = { size: 9 }
 
-        const fromValue = parseTimeToDate(shift.time_from)
-        row.getCell(4).value = fromValue
-        row.getCell(4).numFmt = 'hh:mm AM/PM'
+        row.getCell(4).value = rowData.from
         row.getCell(4).alignment = { horizontal: 'center' }
         row.getCell(4).font = { size: 9 }
 
-        const toValue = parseTimeToDate(shift.time_to)
-        row.getCell(5).value = toValue
-        row.getCell(5).numFmt = 'hh:mm AM/PM'
+        row.getCell(5).value = rowData.to
         row.getCell(5).alignment = { horizontal: 'center' }
         row.getCell(5).font = { size: 9 }
 
-        row.getCell(6).value = lineItemDesc
+        row.getCell(6).value = rowData.description
         row.getCell(6).alignment = { horizontal: 'left' }
         row.getCell(6).font = { size: 9 }
 
-        row.getCell(8).value = lineItemCode
+        row.getCell(8).value = rowData.code
         row.getCell(8).alignment = { horizontal: 'center' }
         row.getCell(8).font = { size: 9 }
 
-        row.getCell(9).value = displayQty > 0 ? displayQty : ''
+        row.getCell(9).value = rowData.qty > 0 ? rowData.qty : ''
         row.getCell(9).alignment = { horizontal: 'center' }
         row.getCell(9).font = { size: 10 }
 
-        // Unit Price (merged F-G and J-K above) — derive from shift cost/hours when available
-        row.getCell(10).value = unitRate
+        row.getCell(10).value = typeof rowData.rate === 'number' ? parseFloat(rowData.rate.toFixed(2)) : ''
         row.getCell(10).numFmt = '0.00'
         row.getCell(10).alignment = { horizontal: 'center' }
         row.getCell(10).font = { size: 10 }
 
-        row.getCell(12).value = typeof amount === 'number' ? parseFloat(amount.toFixed(2)) : (amount || '')
+        row.getCell(12).value = typeof rowData.amount === 'number' ? parseFloat(rowData.amount.toFixed(2)) : ''
         row.getCell(12).numFmt = '0.00'
         row.getCell(12).alignment = { horizontal: 'center' }
         row.getCell(12).font = { size: 10 }
 
-        // Apply borders to all cells in the row
+        if (typeof rowData.amount === 'number') {
+          totalAmount += rowData.amount
+        }
+
         for (let col = 2; col <= 12; col++) {
           const cell = row.getCell(col)
           cell.border = {
@@ -712,19 +867,19 @@ export async function POST(req: NextRequest) {
         row.commit()
       })
 
-        // Apply thick borders around each day block (outer edges thick, internal grid thin)
       const dayGroups: Array<{ start: number; end: number }> = []
-      if (sortedShifts.length > 0) {
+      if (invoiceRows.length > 0) {
         let groupStart = dataStartRow
-        let prevDate = sortedShifts[0].shift_date
-        sortedShifts.forEach((shift, idx) => {
+        let prevDate = formatLocalYmd(invoiceRows[0].rowDate)
+        invoiceRows.forEach((rowData, idx) => {
           const rowNumber = dataStartRow + idx
-          if (shift.shift_date !== prevDate) {
+          const currentDate = formatLocalYmd(rowData.rowDate)
+          if (currentDate !== prevDate) {
             dayGroups.push({ start: groupStart, end: rowNumber - 1 })
             groupStart = rowNumber
-            prevDate = shift.shift_date
+            prevDate = currentDate
           }
-          if (idx === sortedShifts.length - 1) {
+          if (idx === invoiceRows.length - 1) {
             dayGroups.push({ start: groupStart, end: rowNumber })
           }
         })
@@ -748,50 +903,35 @@ export async function POST(req: NextRequest) {
 
         dayGroups.forEach(applyDayBorders)
 
-        // Merge DOW cells for same consecutive dates; only rotate text if multiple shifts
         dayGroups.forEach(g => {
           const row = sheet.getRow(g.start)
           const cell = row.getCell(2)
-          
           if (g.start === g.end) {
-            // Single row for this day: center text normally (no rotation)
             cell.alignment = { horizontal: 'center', vertical: 'middle' }
           } else {
-            // Multiple rows for this day: merge DOW cells and rotate 90 degrees
             try {
               sheet.mergeCells(`B${g.start}:B${g.end}`)
-            } catch (e) {
-              /* already merged */
-            }
+            } catch (e) { }
             cell.alignment = { horizontal: 'center', vertical: 'middle', textRotation: 90 }
           }
           row.commit()
         })
       }
 
-      // Add TOTALS row (with thick outline, thin internal grid not applicable since single row)
-      const totalsRow = sheet.getRow(dataStartRow + sortedShifts.length)
-      const totalsRowNumber = dataStartRow + sortedShifts.length
-      
-      // Merge cells for totals row if not already merged
+      const totalsRow = sheet.getRow(dataStartRow + invoiceRows.length)
+      const totalsRowNumber = dataStartRow + invoiceRows.length
       const totalsJkRange = `J${totalsRowNumber}:K${totalsRowNumber}`
-      try { sheet.mergeCells(totalsJkRange) } catch (e) { /* already merged */ }
-      
-      // Unit Price cells (J-K merged above)
+      try { sheet.mergeCells(totalsJkRange) } catch (e) { }
       totalsRow.getCell(10).value = 'Total:'
       totalsRow.getCell(10).font = { bold: true, size: 10 }
       totalsRow.getCell(10).alignment = { horizontal: 'right' }
-      
       totalsRow.getCell(12).value = parseFloat(totalAmount.toFixed(2))
       totalsRow.getCell(12).numFmt = '0.00'
       totalsRow.getCell(12).font = { bold: true, size: 10 }
       totalsRow.getCell(12).alignment = { horizontal: 'center' }
-      
-      // Clear borders for totals row first
       for (let col = 1; col <= sheet.columnCount; col++) {
         totalsRow.getCell(col).border = {}
       }
-      // Step 3: B-L top border thick
       for (let col = 2; col <= 12; col++) {
         const cell = totalsRow.getCell(col)
         cell.border = {
@@ -801,7 +941,6 @@ export async function POST(req: NextRequest) {
           right: undefined
         }
       }
-      // Step 4 & 5: cells K (11) and L (12) all borders, thick box (except thin right border on K between Total: and value)
       const cellK = totalsRow.getCell(11)
       cellK.border = {
         top: { style: 'medium' },
@@ -809,7 +948,6 @@ export async function POST(req: NextRequest) {
         left: { style: 'medium' },
         right: { style: 'thin' }
       }
-      
       const cellL = totalsRow.getCell(12)
       cellL.border = {
         top: { style: 'medium' },
