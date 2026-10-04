@@ -75,7 +75,7 @@ export async function GET(req: Request) {
         clientId: invoice.client_id,
         dateFrom: invoice.date_from,
         dateTo: invoice.date_to,
-        timezoneOffset: 0 // Use server timezone for regenerated invoices
+        timeZone: searchParams.get('timeZone') || 'Australia/Sydney'
       })
     })
 

@@ -4,6 +4,7 @@ import ExcelJS from 'exceljs'
 import path from 'path'
 import fs from 'fs/promises'
 import { Database } from '@/app/lib/types/supabase'
+import { invoiceTimeZone, localInvoiceTime, invoiceDayDifference, invoiceTimeLabel } from '@/lib/invoice-time'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
@@ -17,7 +18,8 @@ interface InvoiceRequestBody {
   clientId?: number
   dateFrom?: string
   dateTo?: string
-  timezoneOffset?: number // Browser's timezone offset in minutes
+  timeZone?: string // IANA zone, with date-specific daylight saving rules
+  timezoneOffset?: number // Legacy callers; fixed offsets are no longer used
 }
 
 type LineItemMeta = {
@@ -75,7 +77,12 @@ export async function POST(req: NextRequest) {
   const clientId = body.clientId
   const dateFrom = body.dateFrom || invoiceDate
   const dateTo = body.dateTo || invoiceDate
-  const timezoneOffset = body.timezoneOffset ?? 0 // Browser's timezone offset in minutes
+  let timeZone: string
+  try {
+    timeZone = invoiceTimeZone(body.timeZone)
+  } catch {
+    return NextResponse.json({ error: 'Invalid invoice time zone.' }, { status: 400 })
+  }
 
   if (!carerIds.length) {
     return NextResponse.json({ error: 'carerId is required.' }, { status: 400 })
@@ -427,25 +434,6 @@ export async function POST(req: NextRequest) {
       return `${year}-${month}-${day}`
     }
 
-    const parseTimeToDate = (t: string) => {
-      if (!t) return ''
-      // Parse the UTC timestamp from database
-      const dt = new Date(t)
-      if (Number.isNaN(dt.getTime())) return t
-      
-      // Apply the browser's timezone offset to reverse the conversion that happened
-      // when buildUtcIsoFromLocal was called. This converts UTC back to the user's local time.
-      const offsetMs = timezoneOffset * 60 * 1000
-      const localDate = new Date(dt.getTime() + offsetMs)
-      
-      // Format as HH:MM AM/PM
-      const hours12 = localDate.getUTCHours() % 12 || 12
-      const ampm = localDate.getUTCHours() < 12 ? 'AM' : 'PM'
-      const minutes = localDate.getUTCMinutes()
-      
-      return `${String(hours12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`
-    }
-
     const getDayTypeFromYmd = (ymd: string): 'weekday' | 'saturday' | 'sunday' => {
       const d = parseYmdToLocalDate(ymd)
       const day = d.getDay()
@@ -478,10 +466,7 @@ export async function POST(req: NextRequest) {
 
     const toLocalMinutesFromIso = (iso: string | null | undefined): number | null => {
       if (!iso) return null
-      const dt = new Date(iso)
-      if (Number.isNaN(dt.getTime())) return null
-      const local = new Date(dt.getTime() + timezoneOffset * 60 * 1000)
-      return local.getUTCHours() * 60 + local.getUTCMinutes()
+      return localInvoiceTime(iso, timeZone)?.minutes ?? null
     }
 
     const isTimeInWindow = (minutes: number, from: string | null | undefined, to: string | null | undefined) => {
@@ -513,14 +498,7 @@ export async function POST(req: NextRequest) {
       return overlap(shiftStart, shiftEnd, liStart, liEnd)
     }
 
-    const formatMinutesAsLabel = (minutes: number, dayOffset: number) => {
-      const normalized = ((minutes % (24 * 60)) + 24 * 60) % (24 * 60)
-      const hh = Math.floor(normalized / 60)
-      const mm = normalized % 60
-      const hour12 = hh % 12 || 12
-      const ampm = hh < 12 ? 'AM' : 'PM'
-      return `${String(hour12).padStart(2, '0')}:${String(mm).padStart(2, '0')} ${ampm}${dayOffset > 0 ? ` (+${dayOffset}d)` : ''}`
-    }
+    const formatMinutesAsLabel = invoiceTimeLabel
 
     type InvoiceSegmentRow = {
       rowDate: Date
@@ -538,22 +516,27 @@ export async function POST(req: NextRequest) {
       const isSleepover = Boolean(shift.is_sleepover)
       const isPublicHoliday = Boolean(shift.is_public_holiday)
       const lineItems = Array.from(lineItemMap.values())
-      const dateBase = parseYmdToLocalDate(shift.shift_date)
+      const dateBase = parseYmdToLocalDate(localInvoiceTime(shift.time_from, timeZone)?.date ?? shift.shift_date)
       const localStart = toLocalMinutesFromIso(shift.time_from)
       const rawLocalEnd = toLocalMinutesFromIso(shift.time_to)
       if (localStart == null || rawLocalEnd == null) {
         return []
       }
-      const localEnd = rawLocalEnd <= localStart ? rawLocalEnd + 24 * 60 : rawLocalEnd
+      const startTime = localInvoiceTime(shift.time_from, timeZone)!
+      const endTime = localInvoiceTime(shift.time_to, timeZone)!
+      const endDayOffset = invoiceDayDifference(startTime.date, endTime.date)
+      const localEnd = rawLocalEnd + endDayOffset * 24 * 60
+      // Keep billing based on clock hours, including on DST transition days.
+      if (localEnd <= localStart) return []
 
       const rows: InvoiceSegmentRow[] = []
 
       if (category === 'HIREUP') {
         const rate = typeof shift.cost === 'number' ? shift.cost : 0
-        const endLabel = rawLocalEnd <= localStart ? `${formatMinutesAsLabel(rawLocalEnd, 1)}` : formatMinutesAsLabel(rawLocalEnd, 0)
+        const endLabel = formatMinutesAsLabel(rawLocalEnd)
         rows.push({
           rowDate: dateBase,
-          from: formatMinutesAsLabel(localStart, 0),
+          from: formatMinutesAsLabel(localStart),
           to: endLabel,
           description: 'HIREUP Shift',
           code: 'HIREUP',
@@ -578,10 +561,10 @@ export async function POST(req: NextRequest) {
 
         if (!chosen) return []
         const rate = typeof chosen.billed_rate === 'number' ? chosen.billed_rate : 0
-        const endLabel = rawLocalEnd <= localStart ? `${formatMinutesAsLabel(rawLocalEnd, 1)}` : formatMinutesAsLabel(rawLocalEnd, 0)
+        const endLabel = formatMinutesAsLabel(rawLocalEnd)
         rows.push({
           rowDate: dateBase,
-          from: formatMinutesAsLabel(localStart, 0),
+          from: formatMinutesAsLabel(localStart),
           to: endLabel,
           description: chosen.description ?? '',
           code: chosen.code ?? '',
@@ -631,8 +614,8 @@ export async function POST(req: NextRequest) {
             const rate = typeof li.billed_rate === 'number' ? li.billed_rate : 0
             rows.push({
               rowDate,
-              from: formatMinutesAsLabel(overlapStart, segment.dayOffset),
-              to: formatMinutesAsLabel(overlapEnd, segment.dayOffset),
+              from: formatMinutesAsLabel(overlapStart),
+              to: formatMinutesAsLabel(overlapEnd),
               description: li.description ?? '',
               code: li.code ?? '',
               qty: hours,
@@ -676,8 +659,8 @@ export async function POST(req: NextRequest) {
       const rate = typeof shift.cost === 'number' && shiftHours > 0 ? parseFloat((shift.cost / shiftHours).toFixed(2)) : (typeof fallbackRate === 'number' ? fallbackRate : '')
       rows.push({
         rowDate: dateBase,
-        from: formatMinutesAsLabel(localStart, 0),
-        to: formatMinutesAsLabel(rawLocalEnd <= localStart ? rawLocalEnd : rawLocalEnd, rawLocalEnd <= localStart ? 1 : 0),
+        from: formatMinutesAsLabel(localStart),
+        to: formatMinutesAsLabel(rawLocalEnd),
         description: fallbackDescription,
         code: fallbackCode,
         qty: shiftHours,

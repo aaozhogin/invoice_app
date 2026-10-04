@@ -104,7 +104,8 @@ export default function InvoicesClient() {
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`
       }
-      const res = await fetch(`/api/download-invoice?number=${encodeURIComponent(invoice.invoice_number)}&date=${invoice.invoice_date}`, { headers })
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const res = await fetch(`/api/download-invoice?number=${encodeURIComponent(invoice.invoice_number)}&date=${invoice.invoice_date}&timeZone=${encodeURIComponent(timeZone)}`, { headers })
       if (!res.ok) throw new Error('Failed to download invoice')
       
       const json = await res.json()
